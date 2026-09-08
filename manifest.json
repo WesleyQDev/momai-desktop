@@ -1,17 +1,10 @@
 {
-  "id": "momai-open",
-  "name": "MomAI Open",
-  "version": "1.1.4",
-  "kind": "packaged",
-  "is_official": true,
-  "description": "Abra programas, pastas e arquivos do computador pedindo por voz ou texto.",
+  "id": "momai-desktop",
+  "name": "MomAI Desktop",
+  "version": "2.0.2",
+  "description": "Abra programas e automatize tarefas: a MomAI enxerga os botões da tela e mostra cada passo.",
   "category": "utility",
-  "tags": ["launcher", "open", "apps", "files", "folders"],
-  "author": "WesleyQDev",
-  "repo": "WesleyQDev/momai-open",
-  "icon_bg": "#0066CC",
-  "icon": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"#ffffff\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z\"/><path d=\"M12 15l-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z\" fill=\"#ffffff\" fill-opacity=\"0.18\"/><path d=\"M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0\"/><path d=\"M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5\"/></svg>",
-  "sidebar_icon": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"#38bdf8\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z\"/><path d=\"M12 15l-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z\" fill=\"#38bdf8\" fill-opacity=\"0.15\"/><path d=\"M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0\"/><path d=\"M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5\"/></svg>",
+  "tags": ["launcher", "programas", "pastas", "desktop", "automacao", "acessibilidade"],
   "readme": {
     "pt-BR": "README.md",
     "en-US": "README.en-US.md",
@@ -22,78 +15,130 @@
   },
   "locales": {
     "pt-BR": {
-      "name": "MomAI Open",
-      "description": "Abra programas, pastas e arquivos do computador pedindo por voz ou texto.",
+      "name": "MomAI Desktop",
+      "description": "Abra programas e automatize tarefas: a MomAI enxerga os botões da tela e mostra cada passo.",
       "category": "utility",
-      "tags": ["lançador", "abrir", "aplicativos", "arquivos", "pastas"]
+      "tags": ["lançador", "programas", "pastas", "desktop", "automação", "acessibilidade"]
     },
     "en-US": {
-      "name": "MomAI Open",
-      "description": "Opens programs, apps, folders, files and URLs on your computer via voice or text commands.",
+      "name": "MomAI Desktop",
+      "description": "Open programs and automate tasks: MomAI sees the on-screen buttons and shows every step.",
       "category": "utility",
-      "tags": ["launcher", "open", "apps", "files", "folders"]
+      "tags": ["launcher", "programs", "folders", "desktop", "automation", "accessibility"]
     },
     "es": {
-      "name": "MomAI Open",
-      "description": "Abre programas, aplicaciones, carpetas, archivos y URL en tu computadora con comandos de voz o texto.",
+      "name": "MomAI Desktop",
+      "description": "Abra programas y automatice tareas: MomAI ve los botones de la pantalla y muestra cada paso.",
       "category": "utility",
-      "tags": ["lanzador", "abrir", "aplicaciones", "archivos", "carpetas"]
+      "tags": ["lanzador", "programas", "carpetas", "escritorio", "automatización", "accesibilidad"]
     },
     "fr": {
-      "name": "MomAI Open",
-      "description": "Ouvre des programmes, applications, dossiers, fichiers et URL sur votre ordinateur par commandes vocales ou textuelles.",
+      "name": "MomAI Desktop",
+      "description": "Ouvrez des programmes et automatisez des tâches : MomAI voit les boutons à l'écran et montre chaque étape.",
       "category": "utility",
-      "tags": ["lanceur", "ouvrir", "applications", "fichiers", "dossiers"]
+      "tags": ["lanceur", "programmes", "dossiers", "bureau", "automatisation", "accessibilité"]
     },
     "de": {
-      "name": "MomAI Open",
-      "description": "Öffnet Programme, Apps, Ordner, Dateien und URLs auf deinem Computer per Sprach- oder Textbefehl.",
+      "name": "MomAI Desktop",
+      "description": "Programme öffnen und Aufgaben automatisieren: MomAI sieht die Schaltflächen und zeigt jeden Schritt.",
       "category": "utility",
-      "tags": ["starter", "öffnen", "apps", "dateien", "ordner"]
+      "tags": ["starter", "programme", "ordner", "desktop", "automatisierung", "barrierefreiheit"]
     },
     "it": {
-      "name": "MomAI Open",
-      "description": "Apre programmi, app, cartelle, file e URL sul tuo computer con comandi vocali o testuali.",
+      "name": "MomAI Desktop",
+      "description": "Apri programmi e automatizza attività: MomAI vede i pulsanti sullo schermo e mostra ogni passaggio.",
       "category": "utility",
-      "tags": ["avvio", "aprire", "app", "file", "cartelle"]
+      "tags": ["avvio", "programmi", "cartelle", "desktop", "automazione", "accessibilità"]
     }
   },
-  "structuredTypes": ["generic-extension"],
+  "author": "WesleyQDev",
+  "icon": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\"><rect x=\"2\" y=\"4\" width=\"20\" height=\"12.5\" rx=\"3.5\" fill=\"#ffffff\" fill-opacity=\"0.18\" stroke=\"#ffffff\" stroke-width=\"1.8\"/><circle cx=\"5\" cy=\"7\" r=\"0.8\" fill=\"#ffffff\" opacity=\"0.9\"/><circle cx=\"7.3\" cy=\"7\" r=\"0.8\" fill=\"#ffffff\" opacity=\"0.55\"/><path d=\"M10.6 9.3v4.4l1.5-1.4 1 1.9 1.2-.6-1-1.8 1.7-.5-4.4-2z\" fill=\"#ffffff\" stroke=\"#ffffff\" stroke-width=\"0.6\" stroke-linejoin=\"round\"/><path d=\"M9 20.5h6\" stroke=\"#ffffff\" stroke-width=\"1.8\" stroke-linecap=\"round\"/><path d=\"M12 16.5v4\" stroke=\"#ffffff\" stroke-width=\"1.8\" stroke-linecap=\"round\"/><circle cx=\"18.6\" cy=\"5.8\" r=\"2.7\" fill=\"#38BDF8\"/><path d=\"M19 4.4l-1.2 1.7h.9l-.3 1.4 1.2-1.7h-.9l.3-1.4z\" fill=\"#ffffff\"/></svg>",
+  "icon_bg": "#6366f1",
+  "sidebar_icon": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\"><rect x=\"2\" y=\"4.5\" width=\"20\" height=\"12\" rx=\"3.5\" fill=\"#6366F1\"/><rect x=\"4.3\" y=\"6.8\" width=\"15.4\" height=\"7.4\" rx=\"1.8\" fill=\"#FFFFFF\"/><circle cx=\"6.2\" cy=\"8.6\" r=\"0.7\" fill=\"#6366F1\" opacity=\"0.55\"/><circle cx=\"8.1\" cy=\"8.6\" r=\"0.7\" fill=\"#6366F1\" opacity=\"0.3\"/><path d=\"M10.6 9.8v3.6l1.2-1.1.8 1.5 1-.5-.8-1.4 1.4-.4-3.6-1.7z\" fill=\"#4F46E5\"/><path d=\"M9 20.5h6\" stroke=\"#6366F1\" stroke-width=\"1.9\" stroke-linecap=\"round\"/><path d=\"M12 16.5v4\" stroke=\"#6366F1\" stroke-width=\"1.9\" stroke-linecap=\"round\"/><circle cx=\"18.6\" cy=\"5.8\" r=\"2.7\" fill=\"#38BDF8\" stroke=\"#FFFFFF\" stroke-width=\"1\"/><path d=\"M19 4.4l-1.2 1.7h.9l-.3 1.4 1.2-1.7h-.9l.3-1.4z\" fill=\"#ffffff\"/></svg>",
+  "momai_compat": ">=1.12.0",
   "sdkVersion": 1,
-  "momai_compat": ">=1.11.0",
-  "tools": [
-    {
-      "name": "search_local_items",
-      "label": "Buscar programas e pastas",
-      "description": "Busca pastas, arquivos, programas e aplicativos no computador local por nome. Use para abrir ou encontrar qualquer item.",
-      "parameters": {
-        "type": "object",
-        "required": ["query"],
-        "properties": {
-          "query": { "type": "string", "description": "Nome ou termo do item a buscar (pasta, arquivo ou programa)" }
-        }
+  "background": true,
+  "backgroundScript": "worker.ts",
+  "persistent": true,
+  "reset": false,
+  "permissions": ["filesystem:read", "filesystem:write", "process:spawn", "shell:open", "system:shell", "network"],
+  "ui": {
+    "page": "dist/page.js",
+    "pageType": "momai-desktop-page",
+    "panel": "dist/panel.js",
+    "panelType": "momai-desktop-panel"
+  },
+  "eventTypes": {
+    "desktop_run_step": {
+      "label": "Desktop step executed",
+      "fields": {
+        "runId": { "label": "Run", "type": "string" },
+        "kind": { "label": "Step kind", "type": "string" },
+        "label": { "label": "Step", "type": "string" }
       }
     },
-    {
-      "name": "open_local_item",
-      "label": "Abrir item local",
-      "description": "Abre pasta, arquivo ou programa pelo caminho absoluto retornado por search_local_items.",
-      "parameters": {
-        "type": "object",
-        "required": ["path"],
-        "properties": {
-          "path": { "type": "string", "description": "Caminho absoluto do item" },
-          "name": { "type": "string", "description": "Nome do item para confirmacao" }
-        }
+    "desktop_run_finished": {
+      "label": "Desktop run finished",
+      "fields": {
+        "runId": { "label": "Run", "type": "string" },
+        "status": { "label": "Status", "type": "string" }
       }
     }
-  ],
-  "api": {
-    "actions": ["/launcher/open"]
   },
-  "permissions": ["filesystem:read", "process:spawn"],
+  "routes": [
+    { "method": "POST", "path": "/open", "tool": "open_local_item" },
+    { "method": "POST", "path": "/refresh", "tool": "search_local_items" },
+    { "method": "POST", "path": "/rescan", "tool": "search_local_items" },
+    { "method": "POST", "path": "/toggle_auto_open", "tool": "toggle_auto_open" },
+    { "method": "POST", "path": "/confirm_open", "tool": "confirm_open" },
+    { "method": "POST", "path": "/runs", "tool": "desktop_list_runs" },
+    { "method": "POST", "path": "/run", "tool": "desktop_get_run" },
+    { "method": "POST", "path": "/stop", "tool": "desktop_stop_run" },
+    { "method": "POST", "path": "/frames", "tool": "desktop_get_frames" },
+    { "method": "POST", "path": "/settings", "tool": "desktop_settings" }
+  ],
+  "tools": [
+    { "name": "search_local_items" },
+    { "name": "open_local_item" },
+    { "name": "desktop_launch" },
+    { "name": "desktop_act" },
+    { "name": "desktop_snapshot" },
+    { "name": "desktop_find" },
+    { "name": "desktop_click" },
+    { "name": "desktop_type" },
+    { "name": "desktop_press" },
+    { "name": "desktop_get_run" },
+    { "name": "desktop_list_runs" },
+    { "name": "desktop_stop_run" },
+    { "name": "desktop_describe" },
+    { "name": "desktop_screenshot" },
+    { "name": "desktop_get_frames" },
+    { "name": "desktop_settings" }
+  ],
+  "features": {
+    "sidebar": true,
+    "sidebarPanel": {
+      "icon": "launcher",
+      "label": "Launcher",
+      "panelEndpoint": "/panel/launcher"
+    }
+  },
+  "voiceHooks": {
+    "reply": {
+      "tool": "get_history",
+      "promptTemplate": "[INSTRUCAO: User is replying to automated message: {lastMessage}]"
+    }
+  },
+  "toolPriority": {
+    "label": "DESKTOP",
+    "rule": "usar ferramentas de desktop quando o usuario pedir para abrir programas, pastas ou arquivos, ou para clicar, digitar e automatizar algo na tela do computador."
+  },
   "theme": {
-    "gradient": "from-blue-500 to-indigo-600",
-    "accent": "blue"
+    "gradient": "from-indigo-600 to-violet-500",
+    "accent": "violet"
+  },
+  "storage": {
+    "description": "Indice local de programas, guardrails do Desktop (modo de aprovacao, apps permitidos) e replay visual das execucoes (um screenshot por passo, com retencao).",
+    "locations": ["desktop-settings.json", "frames/"]
   }
 }

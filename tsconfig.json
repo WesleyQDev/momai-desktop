@@ -13,5 +13,5 @@
     "esModuleInterop": true,
     "skipLibCheck": true
   },
-  "include": ["runtime.ts", "runtime-shim.d.ts", "test/**/*.ts"]
+  "include": ["runtime.ts", "worker.ts", "runtime-shim.d.ts", "uia/**/*.ts", "desktop/**/*.ts", "test/**/*.ts"]
 }

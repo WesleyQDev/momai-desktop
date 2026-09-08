@@ -1,6 +1,6 @@
-# MomAI Open
+# MomAI Desktop
 
-L'estensione MomAI Open consente alla tua assistente di aprire app, programmi, cartelle e file sul tuo computer tramite richieste naturali con voce o testo.
+L'estensione MomAI Desktop consente alla tua assistente di aprire app, programmi, cartelle e file sul tuo computer — e di automatizzare attività facendo clic e digitando sui pulsanti con il loro nome.
 
 ## Rapidità per aprire tutto sul tuo computer
 
@@ -23,4 +23,4 @@ Invece di cercare icone sul desktop o navigare tra varie cartelle, basta dire di
 
 ## Sicurezza e Privacy
 
-L'estensione MomAI Open opera esclusivamente in base alle tue richieste esplicite e rispetta tutte le autorizzazioni del tuo account utente in Windows. Nessun programma o cartella viene eseguito in background senza la tua richiesta.
+L'estensione MomAI Desktop opera esclusivamente in base alle tue richieste esplicite e rispetta tutte le autorizzazioni del tuo account utente in Windows. Nessun programma o cartella viene eseguito in background senza la tua richiesta.

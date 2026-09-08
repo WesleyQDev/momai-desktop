@@ -1,6 +1,6 @@
-# MomAI Open
+# MomAI Desktop
 
-L'extension MomAI Open permet à votre assistante d'ouvrir des applications, des programmes, des dossiers et des fichiers sur votre ordinateur grâce à des demandes naturelles par voix ou par texte.
+L'extension MomAI Desktop permet à votre assistante d'ouvrir des applications, des programmes, des dossiers et des fichiers sur votre ordinateur — et d'automatiser des tâches en cliquant et en tapant sur les boutons par leur nom.
 
 ## La rapidité pour tout ouvrir sur votre ordinateur
 
@@ -23,4 +23,4 @@ Au lieu de chercher des icônes sur le bureau ou de naviguer dans plusieurs doss
 
 ## Sécurité et Confidentialité
 
-L'extension MomAI Open fonctionne exclusivement selon vos demandes expresses et respecte toutes les autorisations de votre compte utilisateur Windows. Aucun programme ni dossier n'est exécuté en arrière-plan sans votre demande.
+L'extension MomAI Desktop fonctionne exclusivement selon vos demandes expresses et respecte toutes les autorisations de votre compte utilisateur Windows. Aucun programme ni dossier n'est exécuté en arrière-plan sans votre demande.
