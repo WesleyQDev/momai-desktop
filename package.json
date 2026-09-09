@@ -1,6 +1,6 @@
 {
   "name": "momai-desktop",
-  "version": "2.0.2",
+  "version": "2.0.3",
   "private": true,
   "description": "MomAI Desktop: open programs and automate them through the Windows accessibility tree.",
   "type": "commonjs",
