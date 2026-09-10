@@ -3,13 +3,13 @@
   Locates a UIA element and performs one action, in a single session.
   Modes (via -PayloadJson):
     path mode: { path, action, text, key, rect?, name?, app? }
-    find mode: { findName, findRole?, action, text?, submit?, key? }
+    find mode: { findName, findRole?, action, text?, submit?, key?, hwnd?, app? }
       walks once, acts on the live match immediately (no stale refs),
       and returns the fresh tree — one process instead of dump+invoke+dump.
-    action: invoke | click | setvalue | sendkeys | press | winsearch
+    action: invoke | click | setvalue | sendkeys | press | winsearch | gotourl | focuswindow
   Flags: returnTree (path mode also returns the fresh tree).
   Output: single compressed JSON line
-    { ok, action, method?, name?, error?, nodes?, windowTitle?, appName? }
+    { ok, action, method?, name?, error?, nodes?, windowTitle?, appName?, hwnd?, boundStale? }
 #>
 param(
   [string]$PayloadJson = ''
@@ -28,6 +28,10 @@ using System.Runtime.InteropServices;
 public static class Win32Input {
   [DllImport("user32.dll")]
   public static extern bool SetCursorPos(int X, int Y);
+  [DllImport("user32.dll")]
+  public static extern bool GetCursorPos(out POINT lpPoint);
+  [StructLayout(LayoutKind.Sequential)]
+  public struct POINT { public int X; public int Y; }
   [DllImport("user32.dll")]
   public static extern void mouse_event(uint dwFlags, uint dx, uint dy, uint dwData, UIntPtr dwExtraInfo);
   public const uint MOUSEEVENTF_LEFTDOWN = 0x0002;
@@ -174,6 +178,7 @@ function Get-ForegroundRoot {
 function Get-WindowInfo($root) {
   $windowTitle = ''
   $appName = ''
+  $windowHwnd = 0
   try {
     $window = $null
     try {
@@ -192,13 +197,19 @@ function Get-WindowInfo($root) {
     }
     if ($null -ne $window) {
       try { $windowTitle = [string]$window.Current.Name } catch {}
+      $windowHwnd = 0
+      try {
+        $h = $window.GetCurrentPropertyValue(
+          [System.Windows.Automation.AutomationElement]::NativeWindowHandleProperty)
+        $windowHwnd = [long]$h
+      } catch {}
       try {
         $proc = Get-Process -Id $window.Current.ProcessId -ErrorAction SilentlyContinue
         if ($null -ne $proc) { $appName = [string]$proc.ProcessName }
       } catch {}
     }
   } catch {}
-  return @{ windowTitle = $windowTitle; appName = $appName }
+  return @{ windowTitle = $windowTitle; appName = $appName; hwnd = $windowHwnd }
 }
 
 function Find-BestMatch($pairs, $nameNorm, $roleNorm) {
@@ -235,7 +246,7 @@ function Find-BestMatch($pairs, $nameNorm, $roleNorm) {
 }
 
 function Get-CompactTree($root, $maxDepth, $maxNodes) {
-  # One full walk returning @{ pairs; nodes; windowTitle; appName; truncated }.
+  # One full walk returning @{ pairs; nodes; windowTitle; appName; hwnd; truncated }.
   $script:count = 0
   $script:truncated = $false
   $script:maxNodes = $maxNodes
@@ -272,6 +283,7 @@ function Get-CompactTree($root, $maxDepth, $maxNodes) {
     nodes       = $nodes
     windowTitle = $info.windowTitle
     appName     = $info.appName
+    hwnd        = $info.hwnd
     truncated   = [bool]$script:truncated
   }
 }
@@ -301,7 +313,7 @@ function Assert-ForegroundApp($expectedApp) {
 function Focus-Window($el) {
   # Brings the element's top-level window to the foreground so mouse and
   # keystrokes land on the right window. Best effort: patterns below also
-  # work without focus.
+  # work without focus. Returns the target window handle (or Zero).
   $cur = $el
   $window = $null
   for ($i = 0; $i -lt 20 -and $null -ne $cur; $i++) {
@@ -310,18 +322,60 @@ function Focus-Window($el) {
     if ($ct -match 'ControlType\.Window') { $window = $cur; break }
     try { $cur = $walker.GetParent($cur) } catch { $cur = $null }
   }
-  if ($null -eq $window) { return }
+  if ($null -eq $window) { return [IntPtr]::Zero }
   try {
     $hwnd = [IntPtr]$window.GetCurrentPropertyValue(
       [System.Windows.Automation.AutomationElement]::NativeWindowHandleProperty)
-    if ($hwnd -eq [IntPtr]::Zero) { return }
+    if ($hwnd -eq [IntPtr]::Zero) { return [IntPtr]::Zero }
     if ([Win32Input]::IsIconic($hwnd)) {
       [Win32Input]::ShowWindow($hwnd, 9) | Out-Null
       Start-Sleep -Milliseconds 200
     }
     [Win32Input]::SetForegroundWindow($hwnd) | Out-Null
     Start-Sleep -Milliseconds 250
+    return $hwnd
+  } catch { return [IntPtr]::Zero }
+}
+
+function Assert-TargetForeground($targetHwnd) {
+  # Blind input (mouse, keystrokes) is global: refuse it when the target
+  # window did not actually take the foreground (user clicked elsewhere,
+  # foreground lock denied the switch). Acting on the wrong window is
+  # worse than failing loudly.
+  if ($targetHwnd -eq [IntPtr]::Zero) { return }
+  $fg = [IntPtr]::Zero
+  try { $fg = [Win32Input]::GetForegroundWindow() } catch {}
+  if ($fg -ne $targetHwnd) {
+    throw 'background_occluded: the target window is not in the foreground (another window may cover it or the user clicked elsewhere). Bring it forward and retry — never click or type blind.'
+  }
+}
+
+function Save-InputContext() {
+  # Snapshot the real cursor and foreground window so a foreground fallback
+  # can give them back afterwards. Best effort: never fails the action.
+  $ctx = @{ x = $null; y = $null; hwnd = [IntPtr]::Zero }
+  try {
+    $pt = New-Object Win32Input+POINT
+    if ([Win32Input]::GetCursorPos([ref]$pt)) { $ctx.x = $pt.X; $ctx.y = $pt.Y }
   } catch {}
+  try { $ctx.hwnd = [Win32Input]::GetForegroundWindow() } catch {}
+  return $ctx
+}
+
+function Restore-InputContext($ctx) {
+  if ($null -eq $ctx) { return $false }
+  $ok = $true
+  try {
+    if ($null -ne $ctx.hwnd -and $ctx.hwnd -ne [IntPtr]::Zero) {
+      [Win32Input]::SetForegroundWindow($ctx.hwnd) | Out-Null
+    }
+  } catch { $ok = $false }
+  try {
+    if ($null -ne $ctx.x -and $null -ne $ctx.y) {
+      [Win32Input]::SetCursorPos([int]$ctx.x, [int]$ctx.y) | Out-Null
+    }
+  } catch { $ok = $false }
+  return $ok
 }
 
 function Invoke-Click($el) {
@@ -330,7 +384,7 @@ function Invoke-Click($el) {
     if ($el.TryGetCurrentPattern(
         [System.Windows.Automation.InvokePattern]::Pattern, [ref]$pat)) {
       $pat.Invoke()
-      return @{ method = 'invoke' }
+      return @{ method = 'invoke'; delivery = 'background' }
     }
   } catch {}
   try {
@@ -338,7 +392,7 @@ function Invoke-Click($el) {
     if ($el.TryGetCurrentPattern(
         [System.Windows.Automation.SelectionItemPattern]::Pattern, [ref]$pat)) {
       $pat.Select()
-      return @{ method = 'select' }
+      return @{ method = 'select'; delivery = 'background' }
     }
   } catch {}
   try {
@@ -346,14 +400,18 @@ function Invoke-Click($el) {
     if ($el.TryGetCurrentPattern(
         [System.Windows.Automation.TogglePattern]::Pattern, [ref]$pat)) {
       $pat.Toggle()
-      return @{ method = 'toggle' }
+      return @{ method = 'toggle'; delivery = 'background' }
     }
   } catch {}
   # Mouse fallback needs the real cursor on the right window: only now
-  # disturb focus, never for the pattern paths above.
-  Focus-Window $el
+  # disturb focus, never for the pattern paths above. The previous cursor
+  # and foreground window are restored right after the click.
+  $savedCtx = Save-InputContext
+  $targetHwnd = Focus-Window $el
   try { $el.SetFocus() } catch {}
   Start-Sleep -Milliseconds 100
+  try { Assert-TargetForeground $targetHwnd }
+  catch { Restore-InputContext $savedCtx | Out-Null; throw }
   $r = $el.Current.BoundingRectangle
   $cx = [int]($r.X + $r.Width / 2)
   $cy = [int]($r.Y + $r.Height / 2)
@@ -364,7 +422,25 @@ function Invoke-Click($el) {
   Start-Sleep -Milliseconds 40
   [Win32Input]::mouse_event(
     [Win32Input]::MOUSEEVENTF_LEFTUP, 0, 0, 0, [UIntPtr]::Zero)
-  return @{ method = 'mouse' }
+  $restored = Restore-InputContext $savedCtx
+  return @{ method = 'mouse'; delivery = 'foreground'; restored = [bool]$restored }
+}
+
+function Get-WindowHwnd($el) {
+  # Target window handle without touching focus (read-only walk).
+  $cur = $el
+  for ($i = 0; $i -lt 20 -and $null -ne $cur; $i++) {
+    $ct = ''
+    try { $ct = [string]$cur.Current.ControlType.ProgrammaticName } catch {}
+    if ($ct -match 'ControlType\.Window') {
+      try {
+        return [IntPtr]$cur.GetCurrentPropertyValue(
+          [System.Windows.Automation.AutomationElement]::NativeWindowHandleProperty)
+      } catch { return [IntPtr]::Zero }
+    }
+    try { $cur = $walker.GetParent($cur) } catch { $cur = $null }
+  }
+  return [IntPtr]::Zero
 }
 
 function Invoke-Type($el, $text, $submit) {
@@ -376,28 +452,54 @@ function Invoke-Type($el, $text, $submit) {
         $pat.SetValue([string]$text)
       } catch {
         # Some providers need focus before accepting a value.
-        Focus-Window $el
+        $savedCtx = Save-InputContext
+        $targetHwnd = Focus-Window $el
         try { $el.SetFocus() } catch {}
         Start-Sleep -Milliseconds 100
         $pat.SetValue([string]$text)
+        if ($submit) {
+          try { Assert-TargetForeground $targetHwnd }
+          catch { Restore-InputContext $savedCtx | Out-Null; throw }
+        }
       }
       if ($submit) {
         Start-Sleep -Milliseconds 80
+        # Submit is a global keystroke: only send it when the target window
+        # really owns the foreground, else escalate briefly (focus, submit,
+        # restore) instead of confirming inside the user's window.
+        $submitHwnd = Get-WindowHwnd $el
+        $submitFg = [IntPtr]::Zero
+        try { $submitFg = [Win32Input]::GetForegroundWindow() } catch {}
+        if ($submitHwnd -ne [IntPtr]::Zero -and $submitFg -ne $submitHwnd) {
+          $savedCtx = Save-InputContext
+          Focus-Window $el | Out-Null
+          try { $el.SetFocus() } catch {}
+          Start-Sleep -Milliseconds 100
+          try { Assert-TargetForeground (Get-WindowHwnd $el) }
+          catch { Restore-InputContext $savedCtx | Out-Null; throw }
+          [System.Windows.Forms.SendKeys]::SendWait('{ENTER}')
+          $submitRestored = Restore-InputContext $savedCtx
+          return @{ method = 'value-submit'; delivery = 'foreground'; restored = [bool]$submitRestored }
+        }
         [System.Windows.Forms.SendKeys]::SendWait('{ENTER}')
       }
-      return @{ method = 'value' }
+      return @{ method = 'value'; delivery = 'background' }
     }
   } catch {}
   # Keystroke fallback needs focus on the right window.
-  Focus-Window $el
+  $savedCtx = Save-InputContext
+  $targetHwnd = Focus-Window $el
   try { $el.SetFocus() } catch {}
   Start-Sleep -Milliseconds 120
+  try { Assert-TargetForeground $targetHwnd }
+  catch { Restore-InputContext $savedCtx | Out-Null; throw }
   [System.Windows.Forms.SendKeys]::SendWait([string]$text)
   if ($submit) {
     Start-Sleep -Milliseconds 80
     [System.Windows.Forms.SendKeys]::SendWait('{ENTER}')
   }
-  return @{ method = 'sendkeys' }
+  $restored = Restore-InputContext $savedCtx
+  return @{ method = 'sendkeys'; delivery = 'foreground'; restored = [bool]$restored }
 }
 
 try {
@@ -415,7 +517,7 @@ try {
     throw 'Direct-coordinate actions were removed: use path/rect/focus flows.'
   }
 
-  if ($path.Count -eq 0 -and [string]$payload.findName -eq '' -and [string]$payload.findRole -eq '') {
+  if (($action -ne 'gotourl' -and $action -ne 'focuswindow') -and $path.Count -eq 0 -and [string]$payload.findName -eq '' -and [string]$payload.findRole -eq '') {
     throw 'Empty element path'
   }
 
@@ -430,10 +532,23 @@ try {
   $root = [System.Windows.Automation.AutomationElement]::RootElement
   $el = $null
   $rectFallback = $null
+  $bindHwnd = 0
+  try { $bindHwnd = [long]$payload.hwnd } catch { $bindHwnd = 0 }
+  $boundStale = $false
   if ($findMode) {
     # FIND MODE: locate by name/role in one walk, act immediately on the
     # live element (no stale refs possible), fresh tree comes back below.
-    $pre = Get-CompactTree (Get-ForegroundRoot) $maxDepth $maxNodes
+    # A bound window handle scopes the walk to the task window instead of
+    # the foreground one, so user clicks elsewhere don't hijack the task.
+    $searchRoot = Get-ForegroundRoot
+    if ($bindHwnd -ne 0) {
+      $scoped = $null
+      try {
+        $scoped = [System.Windows.Automation.AutomationElement]::FromHandle([IntPtr]$bindHwnd)
+      } catch {}
+      if ($null -ne $scoped) { $searchRoot = $scoped } else { $boundStale = $true }
+    }
+    $pre = Get-CompactTree $searchRoot $maxDepth $maxNodes
     $best = Find-BestMatch $pre.pairs `
       (Remove-Diacritics ([string]$payload.findName)) `
       ((Remove-Diacritics ([string]$payload.findRole)) -replace '\s+', '')
@@ -444,14 +559,31 @@ try {
         nodes       = @($pre.nodes)
         windowTitle = $pre.windowTitle
         appName     = $pre.appName
+        hwnd        = $pre.hwnd
+        boundStale  = [bool]$boundStale
         truncated   = [bool]$pre.truncated
       } | ConvertTo-Json -Depth 12 -Compress)
       return
     }
     $el = $best.el
+  } elseif ($action -eq 'gotourl' -or $action -eq 'focuswindow') {
+    # Element-free actions: no tree walk, keys/focus target the window directly.
+    $el = $null
   } else {
+  # Path mode walks from the snapshot's own window when its handle rides
+  # along (refs from a scoped snapshot stay resolvable even when the user
+  # clicked elsewhere); otherwise the desktop root, as before.
+  $walkRoot = $root
+  $walkHwnd = 0
+  try { $walkHwnd = [long]$payload.hwnd } catch { $walkHwnd = 0 }
+  if ($walkHwnd -ne 0) {
+    try {
+      $scopedWalk = [System.Windows.Automation.AutomationElement]::FromHandle([IntPtr]$walkHwnd)
+      if ($null -ne $scopedWalk) { $walkRoot = $scopedWalk }
+    } catch {}
+  }
   try {
-    $parent = $root
+    $parent = $walkRoot
     foreach ($seg in $path) {
       $el = Find-Child $parent $seg
       if ($null -eq $el) { throw 'Elemento nao encontrado (a janela pode ter mudado)' }
@@ -476,22 +608,77 @@ try {
     try { $name = [string]$el.Current.Name } catch {}
   } elseif ($null -ne $rectFallback) {
     $name = [string]$payload.name
+  } elseif ($action -eq 'gotourl') {
+    $name = [string]$payload.text
+  } elseif ($action -eq 'focuswindow') {
+    $name = "window $([string]$payload.hwnd)"
   }
 
   $info = $null
   if ($action -eq 'winsearch') {
-    # Focus-free launcher: opens Start through the OS itself, types the
-    # program name and confirms. Uses Windows' own index, so Store (UWP)
-    # apps like Calculator work with no snapshot and no focus needed.
+    # Legacy fallback only: the runtime now resolves Start apps directly and
+    # launches via shell:AppsFolder. Simulating the Start menu steals focus,
+    # so this path is foreground by definition.
+    $savedCtx = Save-InputContext
     [System.Windows.Forms.SendKeys]::SendWait('^{ESC}')
     Start-Sleep -Milliseconds 700
     [System.Windows.Forms.SendKeys]::SendWait([string]$payload.text)
     Start-Sleep -Milliseconds 1200
     [System.Windows.Forms.SendKeys]::SendWait('{ENTER}')
     Start-Sleep -Milliseconds 1000
-    $info = @{ method = 'winsearch' }
+    $restored = Restore-InputContext $savedCtx
+    $info = @{ method = 'winsearch'; delivery = 'foreground'; restored = [bool]$restored }
+  } elseif ($action -eq 'gotourl') {
+    # Element-free navigation: Ctrl+L focuses the address bar in any
+    # browser (no locale-fragile name lookup), then the already-escaped
+    # address is typed and confirmed. A bound window handle steers the
+    # keys to the task window even when the user clicked elsewhere.
+    $gotoText = [string]$payload.text
+    if (-not $gotoText) { throw 'Empty URL' }
+    $gotoHwnd = 0
+    try { $gotoHwnd = [long]$payload.hwnd } catch { $gotoHwnd = 0 }
+    if ($gotoHwnd -ne 0) {
+      try {
+        $gh = [IntPtr]$gotoHwnd
+        if ([Win32Input]::IsIconic($gh)) {
+          [Win32Input]::ShowWindow($gh, 9) | Out-Null
+          Start-Sleep -Milliseconds 200
+        }
+        [Win32Input]::SetForegroundWindow($gh) | Out-Null
+        Start-Sleep -Milliseconds 250
+      } catch {}
+    }
+    Assert-ForegroundApp ([string]$payload.app)
+    [System.Windows.Forms.SendKeys]::SendWait('^l')
+    Start-Sleep -Milliseconds 600
+    [System.Windows.Forms.SendKeys]::SendWait($gotoText)
+    Start-Sleep -Milliseconds 300
+    [System.Windows.Forms.SendKeys]::SendWait('{ENTER}')
+    $info = @{ method = 'gotourl'; delivery = 'foreground' }
+  } elseif ($action -eq 'focuswindow') {
+    # Brings a bound window back after focus was stolen mid-task (user
+    # clicked elsewhere): restore when minimized, take the foreground,
+    # and prove it before reporting ok. One shot, no retries here.
+    $focusHwnd = 0
+    try { $focusHwnd = [long]$payload.hwnd } catch { $focusHwnd = 0 }
+    if ($focusHwnd -eq 0) { throw 'Empty window handle' }
+    $fh = [IntPtr]$focusHwnd
+    $probe = $null
+    try {
+      $probe = [System.Windows.Automation.AutomationElement]::FromHandle($fh)
+    } catch {}
+    if ($null -eq $probe) { throw 'window_gone: the bound window no longer exists.' }
+    if ([Win32Input]::IsIconic($fh)) {
+      [Win32Input]::ShowWindow($fh, 9) | Out-Null
+      Start-Sleep -Milliseconds 200
+    }
+    [Win32Input]::SetForegroundWindow($fh) | Out-Null
+    Start-Sleep -Milliseconds 300
+    Assert-TargetForeground $fh
+    $info = @{ method = 'focus'; delivery = 'foreground'; restored = $false }
   } elseif ($null -ne $rectFallback -and ($action -eq 'invoke' -or $action -eq 'click')) {
     Assert-ForegroundApp ([string]$payload.app)
+    $savedCtx = Save-InputContext
     $cx = $rectFallback.x + [int]($rectFallback.w / 2)
     $cy = $rectFallback.y + [int]($rectFallback.h / 2)
     [Win32Input]::SetCursorPos($cx, $cy) | Out-Null
@@ -501,10 +688,12 @@ try {
     Start-Sleep -Milliseconds 40
     [Win32Input]::mouse_event(
       [Win32Input]::MOUSEEVENTF_LEFTUP, 0, 0, 0, [UIntPtr]::Zero)
-    $info = @{ method = 'mouse-rect' }
+    $restored = Restore-InputContext $savedCtx
+    $info = @{ method = 'mouse-rect'; delivery = 'foreground'; restored = [bool]$restored }
   } elseif ($null -ne $rectFallback) {
     Assert-ForegroundApp ([string]$payload.app)
     # Focus the field with a click, then type into the foreground window.
+    $savedCtx = Save-InputContext
     $cx = $rectFallback.x + [int]($rectFallback.w / 2)
     $cy = $rectFallback.y + [int]($rectFallback.h / 2)
     [Win32Input]::SetCursorPos($cx, $cy) | Out-Null
@@ -524,7 +713,8 @@ try {
         [System.Windows.Forms.SendKeys]::SendWait('{ENTER}')
       }
     }
-    $info = @{ method = 'sendkeys-rect' }
+    $restored = Restore-InputContext $savedCtx
+    $info = @{ method = 'sendkeys-rect'; delivery = 'foreground'; restored = [bool]$restored }
   } else {
   switch ($action) {
     'invoke'   { $info = Invoke-Click $el }
@@ -532,11 +722,15 @@ try {
     'setvalue' { $info = Invoke-Type $el ([string]$payload.text) ([bool]$payload.submit) }
     'sendkeys' { $info = Invoke-Type $el ([string]$payload.text) ([bool]$payload.submit) }
     'press' {
-      Focus-Window $el
+      $savedCtx = Save-InputContext
+      $targetHwnd = Focus-Window $el
       try { $el.SetFocus() } catch {}
       Start-Sleep -Milliseconds 100
+      try { Assert-TargetForeground $targetHwnd }
+      catch { Restore-InputContext $savedCtx | Out-Null; throw }
       [System.Windows.Forms.SendKeys]::SendWait([string]$payload.key)
-      $info = @{ method = 'sendkeys' }
+      $restored = Restore-InputContext $savedCtx
+      $info = @{ method = 'sendkeys'; delivery = 'foreground'; restored = [bool]$restored }
     }
     default { throw "Acao desconhecida: $action" }
   }
@@ -544,11 +738,16 @@ try {
 
   if ($returnTree -or $findMode) {
     # Fresh tree in the SAME session: no second process, no stale refs.
-    $post = Get-CompactTree (Get-ForegroundRoot) $maxDepth $maxNodes
+    # Follows the same root the search used (bound window when present).
+    $postRoot = $searchRoot
+    if ($null -eq $postRoot) { $postRoot = Get-ForegroundRoot }
+    $post = Get-CompactTree $postRoot $maxDepth $maxNodes
     $postTree = @{
       nodes       = @($post.nodes)
       windowTitle = $post.windowTitle
       appName     = $post.appName
+      hwnd        = $post.hwnd
+      boundStale  = [bool]$boundStale
       truncated   = [bool]$post.truncated
     }
   }
@@ -557,8 +756,13 @@ try {
     ok     = $true
     action = $action
     method = [string]$info.method
+    delivery = [string]$info.delivery
     name   = $name
+    hwnd   = 0
+    boundStale = [bool]$boundStale
   }
+  if ($null -ne $postTree -and $postTree.hwnd) { $output.hwnd = [long]$postTree.hwnd }
+  if ($info.restored -ne $null) { $output.restored = [bool]$info.restored }
   if ($null -ne $postTree) {
     $output.nodes = $postTree.nodes
     $output.windowTitle = $postTree.windowTitle

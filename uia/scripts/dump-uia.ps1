@@ -1,14 +1,15 @@
 #Requires -Version 5.1
 <#
   Dumps the Windows UI Automation tree as a single compressed JSON line.
-  Output: { ok, windowTitle, appName, truncated, nodes: [...] }
+  Output: { ok, windowTitle, appName, hwnd, boundStale, truncated, nodes: [...] }
   Each node: { control, name, automationId, rect, enabled, offscreen,
                depth, path, patterns }
 #>
 param(
   [string]$Scope = 'active',
   [int]$MaxDepth = 7,
-  [int]$MaxNodes = 400
+  [int]$MaxNodes = 400,
+  [long]$Hwnd = 0
 )
 
 $ErrorActionPreference = 'Stop'
@@ -29,6 +30,15 @@ public static class Win32 {
 '@
 
 function Get-Root {
+  if ($Hwnd -ne 0) {
+    # Window-bound read: the caller's window, not whatever owns the
+    # foreground (the user may have clicked elsewhere mid-task).
+    try {
+      $bound = [System.Windows.Automation.AutomationElement]::FromHandle([IntPtr]$Hwnd)
+      if ($null -ne $bound) { return $bound }
+    } catch {}
+    $script:boundStale = $true
+  }
   if ($Scope -eq 'desktop') {
     return [System.Windows.Automation.AutomationElement]::RootElement
   }
@@ -45,6 +55,7 @@ function Get-Root {
 
 $script:count = 0
 $script:truncated = $false
+$script:boundStale = $false
 $walker = [System.Windows.Automation.TreeWalker]::ControlViewWalker
 
 # NOTE: pattern support is probed only on the single acted element inside
@@ -122,6 +133,7 @@ try {
   $root = Get-Root
   $windowTitle = ''
   $appName = ''
+  $hwndOut = 0
   try {
     # The root itself may already be the window: check self, then ancestors.
     $window = $null
@@ -142,6 +154,11 @@ try {
     if ($null -eq $window -and $Scope -eq 'desktop') { $window = $root }
     if ($null -ne $window) {
       try { $windowTitle = [string]$window.Current.Name } catch {}
+      try {
+        $h = $window.GetCurrentPropertyValue(
+          [System.Windows.Automation.AutomationElement]::NativeWindowHandleProperty)
+        $hwndOut = [long]$h
+      } catch {}
       try {
         $proc = Get-Process -Id $window.Current.ProcessId -ErrorAction SilentlyContinue
         if ($null -ne $proc) { $appName = [string]$proc.ProcessName }
@@ -179,6 +196,8 @@ try {
     ok          = $true
     windowTitle = $windowTitle
     appName     = $appName
+    hwnd        = $hwndOut
+    boundStale  = [bool]$script:boundStale
     truncated   = [bool]$script:truncated
     nodes       = $flat
   }

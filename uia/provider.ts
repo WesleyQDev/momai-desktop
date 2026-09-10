@@ -69,15 +69,27 @@ function runScript(name, args, timeoutMs) {
 
 /**
  * Reads the accessibility tree. Scope: 'active' (foreground window) or
- * 'desktop' (whole desktop, heavier).
+ * 'desktop' (whole desktop, heavier). Pass a window handle to read that
+ * window instead of the foreground one; 0/omitted keeps foreground.
  */
-function dumpTree(scope) {
+function dumpTree(scope, hwnd) {
   const safeScope = scope === 'desktop' ? 'desktop' : 'active'
-  return runScript('dump-uia.ps1', [
+  const args = [
     '-Scope', safeScope,
     '-MaxDepth', '7',
     '-MaxNodes', '400',
-  ], DUMP_TIMEOUT_MS)
+  ]
+  const id = Math.trunc(Number(hwnd) || 0)
+  if (Number.isFinite(id) && id !== 0) args.push('-Hwnd', String(id))
+  return runScript('dump-uia.ps1', args, DUMP_TIMEOUT_MS)
+}
+
+/**
+ * Lists top-level windows without touching focus: [{ hwnd, title, app }].
+ * Used to bind a task to an already-open window behind the foreground one.
+ */
+function listWindows() {
+  return runScript('list-windows.ps1', [], DUMP_TIMEOUT_MS)
 }
 
 /**
@@ -279,6 +291,7 @@ async function describeScreen(question) {
 module.exports = {
   isSupported,
   dumpTree,
+  listWindows,
   invokeAction,
   actOnTree,
   captureScreenshot,

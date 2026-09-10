@@ -143,7 +143,7 @@ function clampInt(value, fallback, min, max) {
 }
 
 function defaultSettings() {
-  return { allowedApps: [], recordVisuals: true, maxSteps: 50, maxRunMinutes: 10, safeStop: true }
+  return { allowedApps: [], recordVisuals: true, maxSteps: 50, maxRunMinutes: 10, safeStop: true, backgroundOnly: false, askBeforeForeground: true }
 }
 
 async function loadSettings(momai) {
@@ -158,6 +158,8 @@ async function loadSettings(momai) {
         maxSteps: clampInt(stored.maxSteps, 50, 1, 100),
         maxRunMinutes: clampInt(stored.maxRunMinutes, 10, 0, 120),
         safeStop: stored.safeStop !== undefined ? stored.safeStop === true : true,
+        backgroundOnly: stored.backgroundOnly !== undefined ? stored.backgroundOnly === true : false,
+        askBeforeForeground: stored.askBeforeForeground !== undefined ? stored.askBeforeForeground === true : true,
       }
     }
   } catch {
@@ -174,6 +176,8 @@ async function saveSettings(momai, patch) {
     maxSteps: patch.maxSteps !== undefined ? clampInt(patch.maxSteps, current.maxSteps, 1, 100) : current.maxSteps,
     maxRunMinutes: patch.maxRunMinutes !== undefined ? clampInt(patch.maxRunMinutes, current.maxRunMinutes, 0, 120) : current.maxRunMinutes,
     safeStop: patch.safeStop !== undefined ? patch.safeStop === true : current.safeStop,
+    backgroundOnly: patch.backgroundOnly !== undefined ? patch.backgroundOnly === true : current.backgroundOnly === true,
+    askBeforeForeground: patch.askBeforeForeground !== undefined ? patch.askBeforeForeground === true : current.askBeforeForeground !== false,
   }
   try {
     await momai.storage.set('desktop-settings', settingsCache)

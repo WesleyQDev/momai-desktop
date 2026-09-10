@@ -16,16 +16,16 @@ para mostrar ao usuário (`desktop_screenshot`) e para detalhar a tela
 
 | Ferramenta | Uso |
 | --- | --- |
-| `search_local_items {query}` | Busca ARQUIVOS E PASTAS pelo nome (uma vez só, decida pelo score) |
-| `open_local_item {path, name?}` | Abre arquivo/pasta pelo caminho absoluto da busca |
-| `desktop_launch {query}` | Abre PROGRAMAS pela busca do Windows (Edge, Firefox, Calculadora, Configurações). Jeito preferido de abrir programa: sem snapshot, sem foco |
-| `desktop_act {objective?, steps}` | Executa a TAREFA INTEIRA numa chamada (jeito preferido p/ sequências): steps `[{op:"launch",query}, {op:"click",name,role?}, {op:"type",name,text,submit?}, {op:"press",name?,key}, {op:"wait",ms?}]`. Resolve nomes na tela fresca com retries (nome+papel, depois só nome); respeita os limites do page |
+| `search_local_items {query}` | Busca programas, arquivos e pastas pelo nome (uma vez só, decida pelo score; inclui apps da Loja como Calculadora via shell:AppsFolder) |
+| `open_local_item {path, name?}` | Abre pelo caminho absoluto da busca ou shell:AppsFolder, sem mover mouse nem teclado |
+| `desktop_launch {query}` | Abre PROGRAMAS pelo índice direto em segundo plano (Edge, Firefox, Calculadora, Configurações). Jeito preferido de abrir programa: sem snapshot, sem foco, sem simular o Iniciar |
+| `desktop_act {objective?, steps}` | Executa a TAREFA INTEIRA numa chamada (jeito preferido p/ sequências): steps `[{op:"launch",query}, {op:"click",name,role?}, {op:"type",name,text,submit?}, {op:"press",name?,key}, {op:"close"}, {op:"goto",url}, {op:"wait",ms?}]`. `close` fecha a janela (botão Fechar/Close, senão Alt+F4). `goto` vai para um endereço no navegador aberto (Ctrl+L, digita, Enter). Se clique num dígito falhar, tente `press` com a tecla. Resolve nomes na tela fresca com retries (nome+papel, depois só nome); respeita os limites do page |
 
 ## Ferramentas de automação (computer use)
 
 | Ferramenta | Uso |
 | --- | --- |
-| `desktop_snapshot {scope?, objective?}` | Lê a janela ativa e lista os elementos como refs numeradas. Chame sempre antes de clicar/digitar |
+| `desktop_snapshot {scope?, objective?, apps?}` | Lê a janela ativa e lista os elementos como refs numeradas. Com `apps: ["Nome"]` lê esse programa mesmo atrás da janela ativa (abre sozinho em 2º plano se fechado). Chame sempre antes de clicar/digitar |
 | `desktop_find {query, role?, snapshotId?}` | Procura um elemento pelo nome visível no último snapshot |
 | `desktop_click {ref, snapshotId?}` | Clica no elemento da ref (tenta o padrão nativo primeiro) |
 | `desktop_type {ref, text, submit?, snapshotId?}` | Digita num campo da ref (`submit:true` dá Enter) |
@@ -42,6 +42,7 @@ para mostrar ao usuário (`desktop_screenshot`) e para detalhar a tela
 
 - "abra o chrome" → `desktop_launch {query: "chrome"}`
 - "abra a calculadora" → `desktop_launch {query: "calculadora"}`
+- "abra o navegador e vá para <endereço>" → `desktop_act` com `[{op:"launch",query:"<navegador>"},{op:"goto",url:"<endereço>"}]`
 - "abra minha pasta de Downloads" → `search_local_items` + `open_local_item`
 - "clique em Salvar no Bloco de Notas" → `desktop_snapshot` → `desktop_find {query: "Salvar"}` → `desktop_click {ref}`
 - "digite meu e-mail no campo" → `desktop_snapshot` → `desktop_click`/`desktop_type {ref, text}`
@@ -54,10 +55,18 @@ Toda tarefa composta segue o mesmo encadeamento. Nunca pare no meio para
 perguntar e nunca repita `search_local_items` com paráfrases: uma busca
 basta, decida pelo score.
 
-1. Para QUALQUER tarefa com 2+ passos (abrir → clicar → digitar),
-   SEMPRE comece com `desktop_act` e a sequência inteira NUMA chamada —
-   ele resolve cada nome na tela fresca, espera o app abrir e tenta de
-   novo sozinho. NÃO faça a sequência manualmente com as primitivas.
+ 1. Para QUALQUER tarefa com 2+ passos (abrir → clicar → digitar),
+    SEMPRE comece com `desktop_act` e a sequência inteira NUMA chamada —
+    ele resolve cada nome na tela fresca, espera o app abrir e tenta de
+    novo sozinho. A tarefa fica amarrada à janela aberta: mesmo que o
+    usuário clique em outro lugar, ela continua na mesma janela sem
+    reabrir — só reabra se a resposta disser que a janela sumiu.
+    Depois de `desktop_launch`, continue com `desktop_act` (o resto inteiro
+    NUMA chamada), não com primitivas soltas. Para preencher vários
+    campos/células, digite e navegue com Tab/Enter em vez de clicar um por um.
+    TASK DONE confirma só os passos: confira o objetivo e continue com outro
+    `desktop_act` se faltar algo — só resuma no final, nunca despeje manual.
+    NÃO faça a sequência manualmente com as primitivas.
    Use as primitivas (`desktop_snapshot` → `desktop_find` →
    `desktop_click` / `desktop_type`) SÓ para explorar uma tela
    desconhecida antes de montar o `desktop_act`, ou quando o `desktop_act`
