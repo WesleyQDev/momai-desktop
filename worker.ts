@@ -19,28 +19,39 @@ const dataDir =
 
 const storageBase = wpath.join(dataDir, 'extensions', skillId || 'momai-desktop')
 
-const SAFE_KEY = /^[a-zA-Z0-9_-]+$/
+// Host-owned SQLite over IPC (isolated per dev mode). storageDir stays as the
+// display path; reads/writes go through storage-request like other workers.
+const { createIpcDesktopStorage } = require('./ipc-storage.ts')
+let storageResponseListener = null
+const ipcBridge = createIpcDesktopStorage({
+  send: (msg) => send(msg),
+  onResponse: (fn) => {
+    storageResponseListener = fn
+  },
+  storageDir: storageBase
+})
 
-const storage = {
-  storageDir: storageBase,
-  async get(key) {
-    if (typeof key !== 'string' || !SAFE_KEY.test(key)) throw new Error('Invalid storage key')
-    try {
-      return JSON.parse(await fsPromises.readFile(wpath.join(storageBase, `${key}.json`), 'utf-8'))
-    } catch {
-      return null
+async function migrateLegacySharedJsonOnce() {
+  let current = null
+  try {
+    current = await ipcBridge.storage.get('desktop-settings')
+  } catch {
+    return
+  }
+  if (current !== null && current !== undefined) return
+  const legacyFile = wpath.join(storageBase, 'desktop-settings.json')
+  try {
+    if (!fsSync.existsSync(legacyFile)) return
+    const parsed = JSON.parse(fsSync.readFileSync(legacyFile, 'utf-8'))
+    if (parsed && typeof parsed === 'object') {
+      await ipcBridge.storage.set('desktop-settings', parsed)
     }
-  },
-  async set(key, value) {
-    if (typeof key !== 'string' || !SAFE_KEY.test(key)) throw new Error('Invalid storage key')
-    await fsPromises.mkdir(storageBase, { recursive: true })
-    const serialized = JSON.stringify(value, null, 2)
-    if (serialized.length > 1024 * 1024) {
-      throw new Error('Storage quota exceeded: max 1MB per extension')
-    }
-    await fsPromises.writeFile(wpath.join(storageBase, `${key}.json`), serialized, 'utf-8')
-  },
+  } catch {
+    /* keep host storage as source of truth */
+  }
 }
+
+const storage = ipcBridge.storage
 
 function send(msg) {
   try {
@@ -128,6 +139,14 @@ process.on('SIGINT', () => shutdown())
 
 process.on('message', async (msg) => {
   if (!msg || typeof msg !== 'object') return
+  if (msg.type === 'storage-response') {
+    try {
+      if (typeof storageResponseListener === 'function') storageResponseListener(msg)
+    } catch {
+      /* listener errors stay local */
+    }
+    return
+  }
   if (msg.type === 'shutdown') {
     await shutdown()
     return
@@ -162,6 +181,7 @@ try {
   runtime = loadRuntime()
   send({ type: 'log', message: `Host initialized (PID: ${process.pid})` })
   send({ type: 'ready' })
+  migrateLegacySharedJsonOnce().catch(() => {})
 } catch (err) {
   send({ type: 'log', message: `Failed to load extension: ${err.message}` })
   send({ type: 'init_error', error: err.message })
