@@ -22,6 +22,13 @@ describe('framesBaseDir (unified extension cache)', () => {
     )
   })
 
+  it('uses the mode-scoped cache dir supplied by the host', () => {
+    vi.stubEnv('MOMAI_EXTENSION_CACHE_DIR', 'D:\\mode\\cache')
+    vi.stubEnv('MOMAI_DATA_DIR', 'C:\\Users\\wesle\\AppData\\Roaming\\MomAI\\data')
+    vi.stubEnv('MOMAI_EXTENSION_ID', 'momai-desktop')
+    expect(runtime.__internals.framesBaseDir()).toBe('D:\\mode\\cache\\frames')
+  })
+
   it('returns null without a data dir (old behavior)', () => {
     vi.stubEnv('MOMAI_DATA_DIR', '')
     vi.stubEnv('MOMAI_NODE_CORE_DATA_DIR', '')

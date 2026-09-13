@@ -6,20 +6,34 @@ const uiaNodes = require('./uia/nodes.ts')
 const uiaProvider = require('./uia/provider.ts')
 const desktopRuns = require('./desktop/runs.ts')
 
-/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+/* ──────────────────────────────────────────────
    Scan Cache
-   â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+   ────────────────────────────────────────────── */
 
 const SCAN_CACHE = { items: null, vocab: null, timestamp: 0 }
-const CACHE_TTL_MS = 60_000
+// Long cache keeps repeated launches fast: a full disk scan on every call
+// costs seconds and repeats the same program list.
+const CACHE_TTL_MS = 10 * 60_000
+
+function getScanCacheTtlMs() {
+  return CACHE_TTL_MS
+}
+
+/* Settle after a navigation submit: the address was just confirmed, so the
+   page needs time to load before any screen read means anything. */
+const NAVIGATION_SETTLE_MS = 2500
+
+function getNavigationSettleMs() {
+  return NAVIGATION_SETTLE_MS
+}
 
 function getEnv(key) {
   return String(process.env[key] || '').trim()
 }
 
-/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+/* ──────────────────────────────────────────────
    Accent Normalization
-   â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+   ────────────────────────────────────────────── */
 
 function normalizeAccents(str) {
   return String(str || '')
@@ -28,9 +42,9 @@ function normalizeAccents(str) {
     .toLowerCase()
 }
 
-/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+/* ──────────────────────────────────────────────
    Windows Indexing (PowerToys/Raycast style)
-   â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+   ────────────────────────────────────────────── */
 
 function scanWindowsStartMenu() {
   const dirs = [
@@ -327,9 +341,9 @@ function walkUserFolder(dirPath, items, seen, category, maxDepth) {
   }
 }
 
-/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+/* ──────────────────────────────────────────────
    Category Inference
-   â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+   ────────────────────────────────────────────── */
 
 function inferCategory(name, dirPath) {
   const lower = String(name || '').toLowerCase()
@@ -340,7 +354,7 @@ function inferCategory(name, dirPath) {
   if (lower.includes('word') || lower.includes('excel') || lower.includes('powerpoint') || lower.includes('outlook') || lower.includes('office') || lower.includes('onenote') || lower.includes('access')) return 'Escritorio'
   if (lower.includes('spotify') || lower.includes('music') || lower.includes('media') || lower.includes('vlc') || lower.includes('player') || lower.includes('video')) return 'Midia'
   if (lower.includes('discord') || lower.includes('slack') || lower.includes('teams') || lower.includes('zoom') || lower.includes('whatsapp') || lower.includes('telegram') || lower.includes('signal')) return 'Comunicacao'
-  if (dirLower.includes('accessories') || dirLower.includes('acessÃ³rios') || dirLower.includes('ferramentas')) return 'Ferramentas'
+  if (dirLower.includes('accessories') || dirLower.includes('acessórios') || dirLower.includes('ferramentas')) return 'Ferramentas'
   if (dirLower.includes('games') || dirLower.includes('jogos') || dirLower.includes('game') || lower.includes('steam') || lower.includes('epic') || lower.includes('unity') || lower.includes('unreal')) return 'Jogos'
   if (dirLower.includes('adobe') || lower.includes('photoshop') || lower.includes('illustrator') || lower.includes('premiere') || lower.includes('after effects') || lower.includes('design') || lower.includes('figma')) return 'Design'
   if (dirLower.includes('system32') || dirLower.includes('system') || dirLower.includes('windows') || lower.includes('calc') || lower.includes('cmd') || lower.includes('powershell') || lower.includes('terminal') || lower.includes('control')) return 'Sistema'
@@ -352,9 +366,9 @@ function inferCategory(name, dirPath) {
   return 'Outros'
 }
 
-/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+/* ──────────────────────────────────────────────
    Build Full Index
-   â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+   ────────────────────────────────────────────── */
 
 function buildFullIndex() {
   const startMenu = scanWindowsStartMenu()
@@ -427,13 +441,13 @@ function getVocabulary() {
   return SCAN_CACHE.vocab || new Set()
 }
 
-/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+/* ──────────────────────────────────────────────
    Scoring Algorithm (semantic fuzzy search)
-   â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+   ────────────────────────────────────────────── */
 
 function isFolderQuery(query) {
   const q = normalizeAccents(query)
-  return /pasta|folder|diret[oÃ³]rio|diret|dir\b|abrir pasta|abrir folder/i.test(q)
+  return /pasta|folder|diret[oó]rio|diret|dir\b|abrir pasta|abrir folder/i.test(q)
 }
 
 function isFileQuery(query) {
@@ -461,7 +475,7 @@ function scoreItem(item, query) {
 
   let score = 0
 
-  /* â”€â”€ Folder queries: heavily prioritize folders â”€â”€ */
+  /* ── Folder queries: heavily prioritize folders ── */
   if (folderQuery) {
     if (isFolder) {
       score = scoreNameMatch(nameNorm, q, vocab)
@@ -470,7 +484,7 @@ function scoreItem(item, query) {
       score = scoreNameMatch(nameNorm, q, vocab) * 0.2
     }
   }
-  /* â”€â”€ File queries: prioritize files â”€â”€ */
+  /* ── File queries: prioritize files ── */
   else if (fileQuery) {
     if (isFile) {
       score = scoreNameMatch(nameNorm, q, vocab)
@@ -479,7 +493,7 @@ function scoreItem(item, query) {
       score = scoreNameMatch(nameNorm, q, vocab) * 0.3
     }
   }
-  /* â”€â”€ Normal query â”€â”€ */
+  /* ── Normal query ── */
   else {
     score = scoreNameMatch(nameNorm, q, vocab)
 
@@ -538,9 +552,9 @@ function scoreNameMatch(nameNorm, q, vocab) {
   return 0
 }
 
-/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+/* ──────────────────────────────────────────────
    Open Item
-   â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+   ────────────────────────────────────────────── */
 
 const openedInSession = new Set()
 
@@ -657,9 +671,9 @@ function openItem(itemPath) {
   })
 }
 
-/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+/* ──────────────────────────────────────────────
    Desktop (computer use via Windows accessibility tree)
-   â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+   ────────────────────────────────────────────── */
 
 const DESKTOP_NOT_SUPPORTED_MSG =
   'Computer use needs Windows: the element analysis must come from the ' +
@@ -685,6 +699,7 @@ const STR = {
     closed: (x) => `Fechei "${x}"`,
     wentto: (x) => `Fui para "${x}"`,
     read: (n, w) => `Li ${n} elementos em "${w}"`,
+    stopped: 'Execução interrompida pelo usuário',
     searched: (x) => `Busquei "${x}"`,
     relocated: (x) => `Tela mudou, achou "${x}" de novo e tentando`,
     focusChanged: (a, b) => `Foco mudou de "${a}" para "${b}"`,
@@ -705,13 +720,16 @@ const STR = {
 }
 function t(key, a?, b?) {
   const dict = STR[LOCALE] || STR['pt-BR']
-  const fn = dict[key] || STR['pt-BR'][key]
-  return fn(a, b)
+  const entry = dict[key] || STR['pt-BR'][key] || STR['en-US'][key]
+  /* A missing label must never crash the whole tool call: degrade to text. */
+  if (typeof entry === 'function') return entry(a, b)
+  if (entry !== undefined && entry !== null) return String(entry)
+  return String(key)
 }
 function stepContext(appName, windowTitle) {
   const app = String(appName || '').trim()
   const win = String(windowTitle || '').trim()
-  if (app && win && win !== app) return `${app} â€¢ ${win}`
+  if (app && win && win !== app) return `${app} • ${win}`
   return app || win || ''
 }
 
@@ -730,11 +748,60 @@ function desktopSnapshotExpiredMsg() {
   return 'Snapshot expired or not found. Take a new desktop_snapshot first, then use the new refs.'
 }
 
-/* Opaque screen: the tree exposes zero actionable elements (Electron
-   without accessibility, canvas, custom-drawn UI). Tells the model the
-   exact next call instead of letting it re-snapshot in hope. */
+/* Shared model-directive fragments: one wording everywhere, so prompt
+   tweaks stay consistent while the call sites stay deduplicated. */
+const DIR_NO_FINAL_YET = 'Nao escreva a resposta final antes de concluir.'
+const DIR_SHORT_UPDATE = 'Keep any final update to 2 short sentences.'
+const DIR_CONTINUE_WITH_REFS = 'PROXIMO PASSO OBRIGATORIO: continue a tarefa com desktop_find, desktop_click ou desktop_type usando as refs ACIMA, escrevendo 1 linha de progresso junto.'
+
+/* One header for every screen handed to the model: window identity, ref
+   lifetime, and how much of the tree is visible (the rest needs
+   desktop_find). Pure so the wording stays covered by tests. */
+function formatSnapshotHeader(input) {
+  const src = input && typeof input === 'object' ? input : {}
+  const lines = [
+    `App: ${String(src.appName || '').trim() || 'unknown'}`,
+    `Window: ${String(src.windowTitle || '').trim() || 'unknown'}`,
+    `snapshotId: ${String(src.snapshotId || '')} (refs expire in ~90s)`,
+  ]
+  const shown = Number(src.shown)
+  const total = Number(src.total)
+  if (Number.isFinite(shown) && Number.isFinite(total) && total > 0) {
+    lines.push(`Elements: ${Math.max(0, Math.trunc(shown))} shown of ${Math.trunc(total)}`)
+  }
+  const warning = String(src.focusWarning || '')
+  if (warning) lines.push(warning)
+  return lines.join('\n')
+}
+
+/* Snapshot target rule: an explicit apps scope wins; otherwise the bound
+   task window wins over the foreground (user clicks elsewhere must not
+   hijack the read); desktop scope and no binding read the foreground.
+   Pure so the rule stays covered by tests. */
+function pickSnapshotHwnd(scope, explicitHwnd, boundHwnd) {
+  if (String(scope || '') === 'desktop') return 0
+  const explicit = normalizeHwnd(explicitHwnd)
+  if (explicit) return explicit
+  return normalizeHwnd(boundHwnd)
+}
+
+/* The bound window is gone (closed handle): re-find the same app among
+   open windows (new handle, e.g. a fresh window of the same program).
+   Returns 0 when the app is gone — the caller falls back to foreground. */
+function resolveStaleBinding(appName, windows) {
+  const app = String(appName || '').trim()
+  if (!app) return 0
+  const found = resolveAppScope([app], windows)
+  if (!found) return 0
+  return normalizeHwnd(found.hwnd)
+}
+
+/* Opaque screen: the tree exposes zero actionable elements (canvas,
+   custom-drawn UI, web content without accessibility). Screenshots go to
+   the user, never to the model, so retrying snapshots cannot reveal the
+   target: report briefly and ask for help instead of burning tool rounds. */
 function opaqueScreenWarning() {
-  return '\nTELA OPACA: a arvore nao expoe botoes ou campos (so containers genericos). Nao tire outro snapshot â€” nao vai mudar. Se a pergunta do usuario for sobre o que aparece na tela, use desktop_describe. Elementos de apps opacos (canvas, jogos, frames web sem acessibilidade) nao sao clicaveis pela arvore.'
+  return '\nOPAQUE SCREEN: the tree exposes no buttons or fields (only generic containers). Do not take another snapshot — it will not change. Content exposed lazily may appear after focus moves into it: call desktop_press with key {TAB} on any ref of the current snapshot, then take one fresh desktop_snapshot and continue with its refs. If the user asked what is on screen, you may try desktop_describe once. If the screen is still empty after that, report progress in 2 short sentences and ask the user for help instead of retrying tools.'
 }
 
 function sleepMs(ms) {
@@ -751,8 +818,11 @@ function isDesktopActActionOp(op) {
 function keyboardFallbackKey(name) {
   const raw = String(name || '').trim()
   if (!raw) return null
-  if (raw.length === 1) {
-    return /[0-9+\-*/=.,()%]/.test(raw) ? raw : null
+  try {
+    const calcKey = uiaNodes.resolveCalculatorKey(raw)
+    if (calcKey) return calcKey
+  } catch {
+    /* calculator aliases are best effort */
   }
   const lower = raw.toLowerCase()
   if (lower === 'enter' || lower === 'return') return '{ENTER}'
@@ -763,11 +833,193 @@ function keyboardFallbackKey(name) {
   return null
 }
 
+function autoPressFallbackKey(op, name) {
+  if (String(op || '').trim().toLowerCase() !== 'click') return null
+  try {
+    return keyboardFallbackKey(name)
+  } catch {
+    return null
+  }
+}
+
+function resolveRecordFrames(settings, params) {
+  const p = params && typeof params === 'object' ? params : {}
+  if (isFalseFlag(p.record) || isFalseFlag(p.recordVisuals)) return false
+  if (isTrueFlag(p.record) || isTrueFlag(p.recordVisuals)) return true
+  const s = settings && typeof settings === 'object' ? settings : {}
+  return s.recordVisuals !== false
+}
+
+/* Calculator digit presses each cost a full screen read (seconds). Merging
+   consecutive global presses ("1","0","*","5","{ENTER}" into "10*5{ENTER}")
+   keeps one SendKeys burst with identical output and far fewer rounds. */
+function isMergeableCalculatorPress(step) {
+  if (!step || typeof step !== 'object') return false
+  if (String(step.op || '').trim().toLowerCase() !== 'press') return false
+  if (String(step.name || '').trim() !== '') return false
+  if (String(step.role || '').trim() !== '') return false
+  const key = String(step.key || '')
+  if (!key || key.length === 0 || key.length > 16) return false
+  return /^(\{[^}]+\}|[0-9+\-*/=.,()%^~[\]])+$/i.test(key)
+}
+
+function collapseCalculatorPressSteps(input) {
+  const list = Array.isArray(input) ? input : []
+  const out = []
+  let burst = ''
+  const flush = () => {
+    if (burst) {
+      out.push({ op: 'press', key: burst })
+      burst = ''
+    }
+  }
+  for (const step of list) {
+    if (isMergeableCalculatorPress(step)) {
+      const key = String(step.key)
+      if (burst.length + key.length > 32) flush()
+      burst += key
+      continue
+    }
+    flush()
+    out.push(step && typeof step === 'object' ? { ...step } : step)
+  }
+  flush()
+  return out
+}
+
+/* A digit expression typed at a window (not a field) cannot use the value
+   pattern: the Window has none, so it falls to keystrokes and trips the
+   foreground guard. Sending it as global keys types the same characters. */
+function isCalculatorExpressionText(text) {
+  const s = String(text || '').trim()
+  if (!s || s.length > 32) return false
+  if (!/^[\d\s+\-*/=.,()%]+$/.test(s)) return false
+  if (/\d/.test(s)) return true
+  return s.length === 1
+}
+
+function escapeCalculatorExpression(text) {
+  const s = String(text || '')
+  let out = ''
+  for (const ch of s) {
+    if (/[0-9*\-\/=.,]/.test(ch)) out += ch
+    else if (ch === ' ' || ch === '\t' || ch === '\n') continue
+    else if (ch === '+' || ch === '^' || ch === '%' || ch === '~' || ch === '(' || ch === ')' || ch === '[' || ch === ']') out += uiaNodes.escapeSendKeysChar(ch)
+    else return null
+  }
+  return out || null
+}
+
+function normalizeCalculatorSteps(input, opts) {
+  const list = Array.isArray(input) ? input : []
+  const scope = opts && typeof opts === 'object' ? opts : {}
+  const enabled = scope.enabled !== undefined
+    ? scope.enabled === true
+    : stepsTargetCalculator(list, scope.appName)
+  const converted = !enabled ? list : list.map((raw) => {
+    const step = raw && typeof raw === 'object' ? { ...raw } : raw
+    if (!step || typeof step !== 'object') return step
+    if (String(step.op || '').trim().toLowerCase() !== 'type') return step
+    if (!isCalculatorExpressionText(step.text)) return step
+    const roleNorm = uiaNodes.normalizeText(step.role).replace(/\s+/g, '')
+    if (roleNorm === 'edit' || roleNorm === 'document' || roleNorm === 'combobox' || roleNorm === 'spinner') return step
+    const key = escapeCalculatorExpression(step.text)
+    if (!key) return step
+    const merged = { op: 'press', key: isTrueFlag(step.submit) ? `${key}{ENTER}` : key }
+    return merged
+  })
+  return collapseCalculatorPressSteps(converted)
+}
+
+/* Calculator digit normalization only runs for calculator tasks: a numeric
+   "type" anywhere else (spreadsheet cell, custom field) must keep its
+   target instead of becoming global keystrokes. A launch step decides;
+   without one, the bound app of a continuing run decides. */
+function stepsTargetCalculator(steps, boundApp) {
+  const list = Array.isArray(steps) ? steps : []
+  const launches = list.filter((s) => s && typeof s === 'object'
+    && String(s.op || '').trim().toLowerCase() === 'launch')
+  if (launches.length > 0) return launches.some((s) => isCalculatorLaunchQuery(s.query))
+  return isCalculatorAppName(boundApp)
+}
+
+function isCalculatorAppName(app) {
+  const norm = uiaNodes.normalizeText(app).replace(/\s+/g, '')
+  if (!norm) return false
+  return norm.includes('calculadora') || norm.includes('calculator')
+}
+
+function isCalculatorLaunchQuery(query) {
+  const raw = String(query || '')
+  if (!raw.trim()) return false
+  const terms = extractSearchTerms(raw) || raw
+  if (resolveProgramAlias(terms) === 'calculator') return true
+  const norm = uiaNodes.normalizeText(terms).replace(/\s+/g, '')
+  return norm.includes('calculadora') || norm.includes('calculator')
+}
+
 function closeButtonCandidates() {
   return [
     { name: 'Close', role: 'Button' },
     { name: 'Fechar', role: 'Button' },
+    { name: 'Cerrar', role: 'Button' },
+    { name: 'Fermer', role: 'Button' },
+    { name: 'Schließen', role: 'Button' },
+    { name: 'Chiudi', role: 'Button' },
   ]
+}
+
+/* Scroll without coordinates: PageUp/PageDown/Home/End keystrokes on the
+   named target (or the auto-target). Inherently foreground, capped at 10
+   pages so a runaway scroll stops itself. */
+function buildScrollKeys(direction, amount) {
+  const dir = String(direction || 'down').trim().toLowerCase()
+  if (dir === 'top') return '{HOME}'
+  if (dir === 'bottom') return '{END}'
+  const key = dir === 'up' ? '{PGUP}' : '{PGDN}'
+  const n = Number(amount)
+  const times = Number.isFinite(n) ? Math.min(Math.max(Math.trunc(n), 1), 10) : 1
+  if (times <= 1) return key
+  return `{${key.slice(1, -1)} ${times}}`
+}
+
+/* Desugars the compound ops before the loop so they reuse the guarded
+   click/press paths (retries, binding, consent, limits) instead of growing
+   a third executor: scroll becomes one targeted press, select becomes
+   open-dropdown plus pick-option clicks. Malformed steps pass through so
+   the loop still skips them loudly. */
+function normalizeSelectScrollSteps(input) {
+  const list = Array.isArray(input) ? input : []
+  const out = []
+  for (const raw of list) {
+    const step = raw && typeof raw === 'object' ? raw : raw
+    if (!step || typeof step !== 'object') {
+      out.push(step)
+      continue
+    }
+    const op = String(step.op || '').trim().toLowerCase()
+    if (op === 'scroll') {
+      const pressed: Record<string, unknown> = { op: 'press', key: buildScrollKeys(step.direction, step.amount) }
+      if (String(step.name || '').trim() !== '') pressed.name = String(step.name)
+      if (String(step.role || '').trim() !== '') pressed.role = String(step.role)
+      out.push(pressed)
+      continue
+    }
+    if (op === 'select') {
+      const name = String(step.name || '').trim()
+      const option = String(step.option || '').trim()
+      if (!name || !option) {
+        out.push(step)
+        continue
+      }
+      const open: Record<string, unknown> = { op: 'click', name }
+      if (String(step.role || '').trim() !== '') open.role = String(step.role)
+      out.push(open, { op: 'click', name: option })
+      continue
+    }
+    out.push(step)
+  }
+  return out
 }
 
 /* Launch verification: did the requested program actually take the
@@ -834,6 +1086,32 @@ function findLaunchWindow(windows, query) {
   }
 }
 
+/* Launch verification verdict: success is only claimed when the active
+   window belongs to the requested program — never on a blind send. */
+function classifyLaunchScreen(query, appName, windowTitle) {
+  if (!String(query || '').trim()) return 'mismatch'
+  return doesLaunchMatchApp(query, appName, windowTitle) ? 'matched' : 'mismatch'
+}
+
+/* After a launch, the foreground may still be another window (slow cold
+   start, focus elsewhere): bind to the requested program when it is
+   already open behind, so later steps never automate the wrong window. */
+async function rebindLaunchedWindow(run, query) {
+  let reboundWindow = null
+  try {
+    const listed = await uiaProvider.listWindows()
+    const wins = listed && listed.ok === true && Array.isArray(listed.windows) ? listed.windows : []
+    reboundWindow = findLaunchWindow(wins, query)
+  } catch {
+    reboundWindow = null
+  }
+  if (!reboundWindow) return null
+  run.targetHwnd = normalizeHwnd(reboundWindow.hwnd)
+  if (reboundWindow.app) run.snapshotApp = reboundWindow.app
+  if (reboundWindow.title) run.snapshotTitle = reboundWindow.title
+  return reboundWindow
+}
+
 /* Miss message that keeps the last underlying reason (not found vs
    focus lost vs occluded) so a stop explains itself. */
 function formatActMissError(name, role, lastError) {
@@ -870,7 +1148,7 @@ function buildActTerminalInstruction(input) {
   const lines = String(src.lines || '')
   const finalText = String(src.finalText || '')
   if (src.aborted === true) {
-    return `TASK STOPPED at step ${src.outcomesLength} of ${src.stepsLength}:\n${lines}\nCURRENT SCREEN:\n${finalText}\nDecida: ajuste e chame desktop_act de novo, ou avise o usuario. Nao explique passo manual.`
+    return `TASK STOPPED at step ${src.outcomesLength} of ${src.stepsLength}:\n${lines}\nCURRENT SCREEN:\n${finalText}\nDecida: ajuste e chame desktop_act de novo, ou avise o usuario. Nao explique passo manual. Keep the final update to 2 short sentences.`
   }
   return `TASK DONE (${src.outcomesLength}/${src.stepsLength}):\n${lines}\nCURRENT SCREEN:\n${finalText}\nDONE confirma só os passos — confira se o OBJETIVO está 100% cumprido: se faltar algo, chame desktop_act de novo com os passos restantes NUMA chamada em vez de resumir. Só resuma quando tudo estiver feito, e nunca despeje instruções manuais para o usuário.`
 }
@@ -917,7 +1195,7 @@ function shouldRefocusWindow(boundHwnd, lastError) {
   const msg = String(lastError || '')
   if (!msg) return false
   if (/window_gone|nao encontrado|not found|not in this snapshot/i.test(msg)) return false
-  return /background_occluded|foreground|focus|foco|mudou|trocou/i.test(msg)
+  return /background_?occluded|foreground|focus|foco|mudou|trocou/i.test(msg)
 }
 
 /* Resolves a snapshot app filter (string or array, as the model passes
@@ -1006,21 +1284,105 @@ function normalizeGotoUrl(raw) {
 }
 
 /* SendKeys treats + ^ % ~ ( ) [ ] { } as modifiers: escape them in one
-   pass so an address is typed literally. */
+   pass so an address is typed literally. Single table in uia/nodes. */
 function escapeSendKeysText(text) {
-  const token = {
-    '{': '{{}',
-    '}': '{}}',
-    '+': '{+}',
-    '^': '{^}',
-    '%': '{%}',
-    '~': '{~}',
-    '(': '{(}',
-    ')': '{)}',
-    '[': '{[}',
-    ']': '{]}',
+  return String(text || '').replace(/[{}\+\^%~\(\)\[\]]/g, (ch) => uiaNodes.escapeSendKeysChar(ch))
+}
+
+/* Models write key names the natural way ("Tab", "Enter", "Ctrl+Home"),
+   but SendKeys only understands {TAB}/{ENTER}/^{HOME}. Normalize the
+   common forms so a missing brace doesn't type literal text into the
+   target. Input already in SendKeys shape passes through untouched, as
+   does plain text to type. Pure so the mapping stays covered by tests. */
+const PRESS_KEY_ALIASES = {
+  tab: '{TAB}',
+  enter: '{ENTER}',
+  esc: '{ESC}',
+  escape: '{ESC}',
+  space: ' ',
+  up: '{UP}',
+  down: '{DOWN}',
+  left: '{LEFT}',
+  right: '{RIGHT}',
+  home: '{HOME}',
+  end: '{END}',
+  pageup: '{PGUP}',
+  pagedown: '{PGDN}',
+  delete: '{DELETE}',
+  del: '{DELETE}',
+  insert: '{INSERT}',
+  ins: '{INSERT}',
+  backspace: '{BACKSPACE}',
+}
+const PRESS_MODIFIERS = { ctrl: '^', control: '^', alt: '%', shift: '+' }
+function normalizePressKeyName(name) {
+  const norm = String(name || '').trim().toLowerCase()
+  if (!norm) return ''
+  if (Object.prototype.hasOwnProperty.call(PRESS_KEY_ALIASES, norm)) return PRESS_KEY_ALIASES[norm]
+  if (/^f\d{1,2}$/.test(norm)) return `{${norm.toUpperCase()}}`
+  if (norm.length === 1) return String(name).trim()
+  return ''
+}
+function normalizePressKey(key) {
+  const raw = String(key || '')
+  if (!raw) return raw
+  /* Already SendKeys-shaped (tokens, modifiers, calculator bursts): hands off. */
+  if (/[{}\^%~]/.test(raw)) return raw
+  const parts = raw.split('+').map((p) => p.trim()).filter(Boolean)
+  if (parts.length > 1) {
+    const mods = []
+    let base = ''
+    for (const part of parts) {
+      const mod = PRESS_MODIFIERS[part.toLowerCase()]
+      if (mod && !base && !mods.includes(mod)) mods.push(mod)
+      else if (base) return raw
+      else base = part
+    }
+    if (!base || mods.length === 0) return raw
+    const normBase = normalizePressKeyName(base)
+    if (!normBase) return raw
+    /* Canonical SendKeys modifier order: shift, ctrl, alt. */
+    const rank = { '+': 0, '^': 1, '%': 2 }
+    mods.sort((a, b) => rank[a] - rank[b])
+    return mods.join('') + normBase
   }
-  return String(text || '').replace(/[{}\+\^%~\(\)\[\]]/g, (ch) => token[ch] || ch)
+  const single = normalizePressKeyName(raw)
+  return single || raw
+}
+
+/* First web address inside a free-text request, so open-plus-navigate can
+   run in one desktop_act call instead of two separate tool rounds. */
+function extractFirstWebUrl(text) {
+  const raw = String(text || '')
+  if (!raw) return null
+  const tokens = raw.split(/\s+/)
+  for (const token of tokens) {
+    const cleaned = token.replace(/^["'“”‘’<([]+/, '').replace(/[.,;!?)\]>]+$/, '')
+    if (!cleaned || (!cleaned.includes('.') && !cleaned.includes('://'))) continue
+    const checked = normalizeGotoUrl(cleaned)
+    if (checked && checked.ok === true && checked.url) return checked.url
+  }
+  return null
+}
+
+/* Submitted text that navigates the browser: typed with Enter, so the
+   follow-up screen must wait for the page instead of reading instantly. */
+function isWebAddressSubmit(text, submit) {
+  if (!isTrueFlag(submit)) return false
+  const value = String(text || '').trim()
+  if (!value || /\s/.test(value)) return false
+  if (!value.includes('.') && !value.includes('://')) return false
+  const checked = normalizeGotoUrl(value)
+  return !!checked && checked.ok === true
+}
+
+/* Miss guidance that breaks find loops: one fresh snapshot, then report. */
+function buildFindMissInstruction(query, truncated) {
+  const name = String(query || '').slice(0, 120) || 'that element'
+  const truncatedHint = truncated === true
+    ? ' The list was truncated, so a fresh snapshot may reveal more elements.'
+    : ''
+  return `No element matching "${name}" in this snapshot.${truncatedHint} Take a new desktop_snapshot once and act on its refs; if it is still missing, report progress instead of searching again. ${DIR_SHORT_UPDATE}`
 }
 
 /* Reads the screen right after an action so the model can keep going
@@ -1046,12 +1408,15 @@ async function followupScreen(run, scope, maxLines) {
     run.snapshotId = freshId
     if (snapshot.appName) run.snapshotApp = snapshot.appName
     if (snapshot.windowTitle) run.snapshotTitle = snapshot.windowTitle
-    const header = [
-      `App: ${snapshot.appName || 'unknown'}`,
-      `Window: ${snapshot.windowTitle || 'unknown'}`,
-      `snapshotId: ${freshId} (refs expire in ~90s)`,
-    ].join('\n')
-    const list = uiaNodes.formatSnapshotForLlm(snapshot, maxLines && maxLines > 0 ? maxLines : 40)
+    const followupLimit = maxLines && maxLines > 0 ? maxLines : 40
+    const header = formatSnapshotHeader({
+      appName: snapshot.appName,
+      windowTitle: snapshot.windowTitle,
+      snapshotId: freshId,
+      shown: Math.min(snapshot.nodes.length, followupLimit),
+      total: snapshot.totalSeen || snapshot.nodes.length,
+    })
+    const list = uiaNodes.formatSnapshotForLlm(snapshot, followupLimit)
     const tail = snapshot.truncated ? '\n(List truncated: use desktop_find to search.)' : ''
     const opaque = uiaNodes.isTreeOpaque(snapshot.nodes) ? opaqueScreenWarning() : ''
     return { text: `${header}\n${list}${tail}${opaque}`, snapshotId: freshId, nodes: snapshot.nodes }
@@ -1080,12 +1445,15 @@ function ingestReturnedTree(run, res, scope, maxLines) {
   run.snapshotId = id
     if (snapshot.appName) run.snapshotApp = snapshot.appName
     if (snapshot.windowTitle) run.snapshotTitle = snapshot.windowTitle
-  const header = [
-    `App: ${snapshot.appName || 'unknown'}`,
-    `Window: ${snapshot.windowTitle || 'unknown'}`,
-    `snapshotId: ${id} (refs expire in ~90s)`,
-  ].join('\n')
-  const list = uiaNodes.formatSnapshotForLlm(snapshot, maxLines && maxLines > 0 ? maxLines : 40)
+  const ingestedLimit = maxLines && maxLines > 0 ? maxLines : 40
+  const header = formatSnapshotHeader({
+    appName: snapshot.appName,
+    windowTitle: snapshot.windowTitle,
+    snapshotId: id,
+    shown: Math.min(snapshot.nodes.length, ingestedLimit),
+    total: snapshot.totalSeen || snapshot.nodes.length,
+  })
+  const list = uiaNodes.formatSnapshotForLlm(snapshot, ingestedLimit)
   const tail = snapshot.truncated ? '\n(List truncated: use desktop_find to search.)' : ''
   const opaque = uiaNodes.isTreeOpaque(snapshot.nodes) ? opaqueScreenWarning() : ''
   return { snapshot, snapshotId: id, nodes: snapshot.nodes, text: `${header}\n${list}${tail}${opaque}` }
@@ -1099,13 +1467,17 @@ function bestTypeTarget(nodes) {
     || null
 }
 
-/* â”€â”€ Replay frames: one screenshot per action step â”€â”€ */
+/* ── Replay frames: one screenshot per action step ── */
 
 const MAX_FRAMES_PER_RUN = 20
 const MAX_KEPT_RUNS_WITH_FRAMES = 10
 const MAX_THUMB_BYTES = 350 * 1024
 
 function framesBaseDir() {
+  // MOMAI_EXTENSION_CACHE_DIR is mode-scoped (Symlink vs Testar Loja), so
+  // replay frames never leak across environments.
+  const modeCacheDir = process.env.MOMAI_EXTENSION_CACHE_DIR || ''
+  if (modeCacheDir) return path.join(modeCacheDir, 'frames')
   const dataDir = process.env.MOMAI_DATA_DIR || process.env.MOMAI_NODE_CORE_DATA_DIR || null
   const extId = process.env.MOMAI_EXTENSION_ID || 'momai-desktop'
   if (!dataDir) return null
@@ -1234,16 +1606,47 @@ async function attachPreview(card, run) {
     card.data.frameCount = frames.length
     card.data.previewThumb = lastFrame ? readFrameDataUrl(lastFrame) : null
     if (!card.data.previewThumb) delete card.data.previewThumb
+    /* Opaque last screen (canvas, no accessibility): the page says so
+       instead of showing a dead replay. Best effort like the preview. */
+    try {
+      const snap = run && run.snapshotId ? desktopRuns.getSnapshot(run.snapshotId) : null
+      if (shouldFlagOpaqueScreen(snap)) card.data.screenOpaque = true
+    } catch {
+      /* flag is best effort */
+    }
   } catch {
     /* preview is best effort */
   }
   return card
 }
 
+/* Replay honesty: the run keeps every step but only up to
+   MAX_FRAMES_PER_RUN screenshots — the page marks the replay partial
+   instead of looking complete. Pure so the rule stays covered by tests. */
+function computeFramesTruncation(frameStepCount, slideCount) {
+  if (frameStepCount === null || frameStepCount === undefined) return false
+  if (slideCount === null || slideCount === undefined) return false
+  const total = Number(frameStepCount)
+  const shown = Number(slideCount)
+  if (!Number.isFinite(total) || !Number.isFinite(shown)) return false
+  return total > shown
+}
+
+/* True only for a real snapshot whose tree exposes nothing actionable
+   (missing/empty snapshots carry no signal, so they stay unflagged). */
+function shouldFlagOpaqueScreen(snapshot) {
+  if (!snapshot || !Array.isArray(snapshot.nodes) || snapshot.nodes.length === 0) return false
+  try {
+    return uiaNodes.isTreeOpaque(snapshot.nodes)
+  } catch {
+    return false
+  }
+}
+
 async function handleDesktopTool({ toolName, args, content, momai }) {
   const params = args && typeof args === 'object' ? args : {}
 
-  /* â”€â”€ desktop_list_runs / desktop_get_run / desktop_stop_run / desktop_settings â”€â”€ */
+  /* ── desktop_list_runs / desktop_get_run / desktop_stop_run / desktop_settings ── */
   if (toolName === 'desktop_list_runs') {
     const limit = Number(params.limit) > 0 ? Number(params.limit) : 10
     const items = desktopRuns.listRuns(limit)
@@ -1285,7 +1688,13 @@ async function handleDesktopTool({ toolName, args, content, momai }) {
       ? desktopRuns.getRun(String(params.runId))
       : desktopRuns.latestActiveRun()
     if (!run) {
-      return { tool: toolName, instruction: JSON.stringify({ frames: [] }), frames: [] }
+      return {
+        tool: toolName,
+        instruction: JSON.stringify({ frames: [] }),
+        frames: [],
+        framesTruncated: false,
+        framesTotal: 0,
+      }
     }
     const rels = listRunFrames(run.id).slice(0, MAX_FRAMES_PER_RUN)
     const steps = Array.isArray(run.steps) ? run.steps : []
@@ -1296,7 +1705,7 @@ async function handleDesktopTool({ toolName, args, content, momai }) {
       if (dataUrl) byFile[rel.split('/').pop()] = dataUrl
     }
     /* One slide per screenshot, each carrying its own caption (step label
-       + app context) â€” no separate title images. */
+       + app context) — no separate title images. */
     const slides = []
     const stepFiles = rels
       .map((r) => r.split('/').pop())
@@ -1319,6 +1728,8 @@ async function handleDesktopTool({ toolName, args, content, momai }) {
       tool: toolName,
       instruction: JSON.stringify({ runId: run.id, total: slides.length }),
       frames: slides,
+      framesTruncated: computeFramesTruncation(frameSteps.length, slides.length),
+      framesTotal: frameSteps.length,
     }
   }
 
@@ -1358,15 +1769,22 @@ async function handleDesktopTool({ toolName, args, content, momai }) {
     }
   }
 
-  /* â”€â”€ desktop_launch: focus-free program opener via Windows Search â”€â”€ */
+  /* ── desktop_launch: focus-free program opener via Windows Search ── */
   if (toolName === 'desktop_launch') {
     const query = String(params.query || content || '').trim()
     if (!query) {
       return { tool: toolName, instruction: 'Tell me the program name to launch (query).' }
     }
+    const directUrl = extractFirstWebUrl(query)
+    if (directUrl) {
+      return { tool: toolName, instruction: `That request already contains a web address (${directUrl}). Use desktop_act once with [{op:"launch",query:"<program>"},{op:"goto",url:"${directUrl}"}] instead of calling desktop_launch first.` }
+    }
     if (!uiaProvider.isSupported()) {
       return { tool: toolName, instruction: DESKTOP_NOT_SUPPORTED_MSG }
     }
+    /* Loaded once up front: the keystroke-fallback gate below runs outside
+       the try block, where the inner loads would be out of scope. */
+    const launchSettings = await desktopRuns.loadSettings(momai)
     const objective = `Abrir ${query.slice(0, 120)}`
     let run = desktopRuns.latestActiveRun()
     const runFresh = run && Date.now() - Date.parse(run.updatedAt) < 10 * 60 * 1000
@@ -1385,19 +1803,42 @@ async function handleDesktopTool({ toolName, args, content, momai }) {
           const launchStepLabel = `${t('launched', best.name)} (segundo plano)`
           desktopRuns.appendStep(run.id, { kind: 'action', label: launchStepLabel })
           await desktopRuns.emitRunEvent(momai, 'desktop_run_step', { runId: run.id, kind: 'action', label: launchStepLabel })
-          const launchSettings = await desktopRuns.loadSettings(momai)
           const screen = await followupScreen(run, 'active', 18)
+          if (!desktopRuns.isAppAllowed(launchSettings, String(run.snapshotApp || '')) && String(run.snapshotApp||'').length>0) {
+            desktopRuns.appendStep(run.id, { kind: 'error', label: `Launch "${query}" blocked: app "${run.snapshotApp}" not in allowed list` })
+            return { tool: toolName, instruction: `App "${run.snapshotApp}" is not in the allowed list. Ask the user to allow it on the MomAI Desktop page.` }
+          }
           if (launchSettings.recordVisuals !== false) {
             await captureRunFrame(run, launchStepLabel, stepContext(run.snapshotApp, run.snapshotTitle))
           }
+          /* Never claim success on the wrong window: the program may still
+             be opening behind the foreground one. */
+          if (classifyLaunchScreen(query, run.snapshotApp, run.snapshotTitle) === 'mismatch') {
+            const rebound = await rebindLaunchedWindow(run, query)
+            if (rebound) {
+              if (!desktopRuns.isAppAllowed(launchSettings, rebound.app)) {
+                desktopRuns.appendStep(run.id, { kind: 'error', label: `Launch "${query}" blocked: app "${rebound.app}" not in allowed list` })
+                return { tool: toolName, instruction: `App "${rebound.app}" is not in the allowed list. Ask the user to allow it on the MomAI Desktop page.` }
+              }
+              const reboundLabel = `${t('launched', best.name)} → "${rebound.title || rebound.app}"`
+              desktopRuns.appendStep(run.id, { kind: 'action', label: reboundLabel })
+              await desktopRuns.emitRunEvent(momai, 'desktop_run_step', { runId: run.id, kind: 'action', label: reboundLabel })
+              return { tool: toolName, instruction: `Launched "${best.name}" — it is open behind "${screen.text.split('\n')[0] || 'the foreground window'}". The run is bound to "${rebound.title || rebound.app}": call desktop_snapshot with apps:"${query}" to see it and continue the task with its refs. Do not relaunch.` }
+            }
+            desktopRuns.appendStep(run.id, { kind: 'error', label: `Launch "${query}" missed: foreground is "${run.snapshotApp || 'unknown'}"` })
+            return { tool: toolName, instruction: `Launch "${query}" was sent but the foreground is still "${run.snapshotApp || 'unknown'}" — the program may be opening slowly or the search missed. Wait and call desktop_snapshot again; if it never appears, relaunch. ${DIR_SHORT_UPDATE}` }
+          }
           const instruction = screen.text
-            ? `Launched "${best.name}" without taking the mouse or keyboard.\nTELA ATUAL (use SOMENTE estas refs):\n${screen.text}\nPROXIMO PASSO OBRIGATORIO: continue a tarefa com desktop_find, desktop_click ou desktop_type usando as refs ACIMA, escrevendo 1 linha de progresso junto. Nao escreva a resposta final antes de concluir.`
+            ? `Launched "${best.name}" without taking the mouse or keyboard.\nTELA ATUAL (use SOMENTE estas refs):\n${screen.text}\n${DIR_CONTINUE_WITH_REFS} ${DIR_NO_FINAL_YET}`
             : JSON.stringify({ ok: true, action: `Launched "${best.name}"`, runId: run.id, delivery: 'background', next: 'Chame desktop_snapshot para ver a janela e continuar a tarefa.' })
           return { tool: toolName, instruction }
         }
       }
     } catch {
       /* fall through to the legacy path below */
+    }
+    if (shouldBlockForeground(launchSettings, params.allowForeground)) {
+      return { tool: toolName, instruction: `${buildForegroundConsentMessage(query, `launch "${query}"`)} — call desktop_launch again with allowForeground:true after user confirms.` }
     }
     let result
     try {
@@ -1409,20 +1850,40 @@ async function handleDesktopTool({ toolName, args, content, momai }) {
       const launchStepLabel = `${t('launched', query)} via Windows Search`
       desktopRuns.appendStep(run.id, { kind: 'action', label: launchStepLabel })
       await desktopRuns.emitRunEvent(momai, 'desktop_run_step', { runId: run.id, kind: 'action', label: launchStepLabel })
-      const launchSettings = await desktopRuns.loadSettings(momai)
       /* Tree first (sets the current app/window), then the frame with the
-         right context â€” a wrong subtitle is worse than +0.4s. */
+         right context — a wrong subtitle is worse than +0.4s. */
       const screen = await followupScreen(run, 'active', 18)
+      if (!desktopRuns.isAppAllowed(launchSettings, String(run.snapshotApp || '')) && String(run.snapshotApp||'').length>0) {
+        desktopRuns.appendStep(run.id, { kind: 'error', label: `Launch "${query}" blocked: app "${run.snapshotApp}" not in allowed list` })
+        return { tool: toolName, instruction: `App "${run.snapshotApp}" is not in the allowed list. Ask the user to allow it on the MomAI Desktop page.` }
+      }
       if (launchSettings.recordVisuals !== false) {
         await captureRunFrame(run, launchStepLabel, stepContext(run.snapshotApp, run.snapshotTitle))
       }
       const postApp = String(run.snapshotApp || '')
       const unchanged = priorApp && postApp && priorApp.toLowerCase() === postApp.toLowerCase()
+      /* Same verification as the fast path: never hand the model refs from
+         the wrong window as if the launch had succeeded. */
+      if (classifyLaunchScreen(query, run.snapshotApp, run.snapshotTitle) === 'mismatch') {
+        const rebound = await rebindLaunchedWindow(run, query)
+        if (rebound) {
+          if (!desktopRuns.isAppAllowed(launchSettings, rebound.app)) {
+            desktopRuns.appendStep(run.id, { kind: 'error', label: `Launch "${query}" blocked: app "${rebound.app}" not in allowed list` })
+            return { tool: toolName, instruction: `App "${rebound.app}" is not in the allowed list. Ask the user to allow it on the MomAI Desktop page.` }
+          }
+          const reboundLabel = `${t('launched', query)} → "${rebound.title || rebound.app}"`
+          desktopRuns.appendStep(run.id, { kind: 'action', label: reboundLabel })
+          await desktopRuns.emitRunEvent(momai, 'desktop_run_step', { runId: run.id, kind: 'action', label: reboundLabel })
+          return { tool: toolName, instruction: `Launched "${query}" — it is open behind "${postApp || 'the foreground window'}". The run is bound to "${rebound.title || rebound.app}": call desktop_snapshot with apps:"${query}" to see it and continue the task with its refs. Do not relaunch.` }
+        }
+        desktopRuns.appendStep(run.id, { kind: 'error', label: `Launch "${query}" missed: foreground is "${postApp || 'unknown'}"` })
+        return { tool: toolName, instruction: `Launch "${query}" was sent but the foreground is still "${postApp || 'unknown'}" — the program may be opening slowly or the search missed. Wait and call desktop_snapshot again; if it never appears, relaunch. ${DIR_SHORT_UPDATE}` }
+      }
       const verifyNote = unchanged
-        ? ` ATENCAO: a janela ativa continua "${postApp}" â€” o app pode estar abrindo devagar ou a busca errou o alvo; confirme o app certo com outro snapshot antes de clicar/digitar.`
+        ? ` ATENCAO: a janela ativa continua "${postApp}" — o app pode estar abrindo devagar ou a busca errou o alvo; confirme o app certo com outro snapshot antes de clicar/digitar.`
         : ''
       const instruction = screen.text
-        ? `Launched "${query}".\nTELA ATUAL (use SOMENTE estas refs):\n${screen.text}${verifyNote}\nPROXIMO PASSO OBRIGATORIO: continue a tarefa com desktop_find, desktop_click ou desktop_type usando as refs ACIMA, escrevendo 1 linha de progresso junto. Se App nao for o programa pedido ainda (app abrindo), aguarde e chame desktop_snapshot de novo. Nao escreva a resposta final antes de concluir.`
+            ? `Launched "${query}".\nTELA ATUAL (use SOMENTE estas refs):\n${screen.text}${verifyNote}\n${DIR_CONTINUE_WITH_REFS} Se App nao for o programa pedido ainda (app abrindo), aguarde e chame desktop_snapshot de novo. ${DIR_NO_FINAL_YET}`
         : JSON.stringify({ ok: true, action: `Launched "${query}"`, runId: run.id, next: 'Chame desktop_snapshot para ver a janela e continuar a tarefa.' })
       /* No card here: shown only when the task ends. */
       return {
@@ -1438,13 +1899,13 @@ async function handleDesktopTool({ toolName, args, content, momai }) {
     }
   }
 
-  /* â”€â”€ desktop_describe: look at the screen and detail it â”€â”€ */
+  /* ── desktop_describe: look at the screen and detail it ── */
   if (toolName === 'desktop_describe') {
     if (!uiaProvider.isSupported()) {
       return { tool: toolName, instruction: DESKTOP_NOT_SUPPORTED_MSG }
     }
     const question = String(params.question || content || '').trim()
-    const res = await uiaProvider.describeScreen(question)
+    const res = await uiaProvider.describeScreen(question, params.screen)
     if (res.ok) {
       return {
         tool: toolName,
@@ -1460,7 +1921,7 @@ async function handleDesktopTool({ toolName, args, content, momai }) {
     return { tool: toolName, instruction: `Could not describe the screen: ${res.error}` }
   }
 
-  /* â”€â”€ desktop_screenshot: show the screen to the USER â”€â”€ */
+  /* ── desktop_screenshot: show the screen to the USER ── */
   if (toolName === 'desktop_screenshot') {
     if (!uiaProvider.isSupported()) {
       return { tool: toolName, instruction: DESKTOP_NOT_SUPPORTED_MSG }
@@ -1490,7 +1951,7 @@ async function handleDesktopTool({ toolName, args, content, momai }) {
           header: {
             icon: '',
             title: shots.length === 1 ? 'Screenshot' : `${shots.length} screenshots`,
-            subtitle: shots.map((s) => s.name).join(' â€¢ '),
+            subtitle: shots.map((s) => s.name).join(' • '),
           },
           sections: shots.map((s, i) => ({
             title: s.name,
@@ -1506,15 +1967,15 @@ async function handleDesktopTool({ toolName, args, content, momai }) {
     }
   }
 
-  /* â”€â”€ Everything below needs Windows UI Automation â”€â”€ */
+  /* ── Everything below needs Windows UI Automation ── */
   if (!uiaProvider.isSupported()) {
     return { tool: toolName, instruction: DESKTOP_NOT_SUPPORTED_MSG }
   }
 
-  /* â”€â”€ desktop_act: whole multi-step task in ONE call â”€â”€
+  /* ── desktop_act: whole multi-step task in ONE call ──
      The model derails when a task needs 5+ round-trips (it stops mid-way
      and explains instead of acting). This op runs the full sequence
-     server-side with settle waits and retries: launch â†’ click names â†’
+     server-side with settle waits and retries: launch → click names →
      type, resolving every name against a fresh snapshot. */
   if (toolName === 'desktop_act') {
     /* Small models often send the array as a JSON string: accept both. */
@@ -1539,8 +2000,13 @@ async function handleDesktopTool({ toolName, args, content, momai }) {
     const runFresh = run && Date.now() - Date.parse(run.updatedAt) < 10 * 60 * 1000
     if (!runFresh) run = desktopRuns.createRun(objective)
     else if (!run.objective) run.objective = objective
+    /* Normalize after the run exists: calculator scoping reads the bound
+       app of a continuing run (referencing it earlier hits the TDZ). */
+    steps = normalizeCalculatorSteps(steps, { appName: run.snapshotApp })
+    steps = normalizeSelectScrollSteps(steps)
     const actSettings = await desktopRuns.loadSettings(momai)
-    const recordFrames = actSettings.recordVisuals !== false
+    const recordFrames = resolveRecordFrames(actSettings, params)
+    const actAllowForeground = isForegroundConsent(params.allowForeground)
     /* Loop guard: the same plan failing identically twice already proved it
        doesn't work — refuse a third identical run so rounds aren't burned
        in a loop. Successes and different plans reset the count. */
@@ -1605,11 +2071,15 @@ async function handleDesktopTool({ toolName, args, content, momai }) {
        locales). Never quits after 1 miss. Scoped to the bound window when
        the run has one, so user clicks elsewhere don't hijack the task. */
     type ActNameResult =
-      | { ok: true; label: string; snapshotId: string | null; rebound: boolean; stale: boolean; refocused: boolean }
+      | { ok: true; label: string; snapshotId: string | null; rebound: boolean; stale: boolean; refocused: boolean; delivery: string; method: string }
       | { ok: false; error: string; stale?: boolean }
-    async function actOnName(op, name, role, extra): Promise<ActNameResult> {
+    async function actOnName(op, name, role, extra, allowForeground): Promise<ActNameResult> {
       const invokeOpts = extra && typeof extra === 'object' ? { ...extra } : {}
       const boundHwnd = normalizeHwnd(run.targetHwnd)
+      /* Background-only contract: when the guardrails forbid the
+         foreground without consent, the script reports
+         background_unavailable instead of moving the mouse or typing. */
+      const treeFlag = foregroundPayloadFlag(actSettings, allowForeground === true)
       async function attemptMerged(round, hwnd) {
         try {
           return await uiaProvider.actOnTree({
@@ -1617,6 +2087,7 @@ async function handleDesktopTool({ toolName, args, content, momai }) {
             findRole: round.role,
             action: op,
             ...(hwnd ? { hwnd } : {}),
+            ...treeFlag,
             ...invokeOpts,
           })
         } catch (err) {
@@ -1661,6 +2132,8 @@ async function handleDesktopTool({ toolName, args, content, momai }) {
           rebound,
           stale,
           refocused: false,
+          delivery: String(res.delivery || ''),
+          method: String(res.method || ''),
         }
       }
       for (const round of rounds) {
@@ -1691,8 +2164,9 @@ async function handleDesktopTool({ toolName, args, content, momai }) {
       }
       /* Single self-healing pass: when the failure smells like stolen focus
          (not a wrong name or a gone window), bring the bound window back
-         once and retry scoped. Anything else stops with the real reason. */
-      if (shouldRefocusWindow(boundHwnd, lastError)) {
+         once and retry scoped — but only with foreground consent, since
+         refocusing steals input. Anything else stops with the real reason. */
+      if (shouldAutoRefocus({ settings: actSettings, consent: allowForeground, hwnd: boundHwnd, error: lastError })) {
         const refocus = await actInvoke({ action: 'focuswindow', hwnd: boundHwnd })
         if (refocus && refocus.ok === true) {
           for (const round of rounds) {
@@ -1724,6 +2198,38 @@ async function handleDesktopTool({ toolName, args, content, momai }) {
       outcomes.push(msg)
       aborted = true
     }
+    /* Call-level foreground consent (params.allowForeground): inherently-
+       foreground steps (press/goto/keystroke launch) are refused BEFORE
+       touching input; pattern-first steps run and are judged by the
+       delivery they report. A run that never attempted anything records
+       no loop-guard history, so retrying it with consent is never blocked. */
+    const refuseForegroundStep = (opName, targetName) => {
+      desktopRuns.appendStep(run.id, { kind: 'error', label: `${opName} "${targetName}" refused: foreground not allowed` })
+      outcomes.push(`${opName} "${targetName}": REFUSED (${buildForegroundRefusal(opName, targetName)})`)
+      aborted = true
+    }
+    const refuseIfEscalated = (opName, targetName, res) => {
+      if (requiresForegroundEscalation(res) && shouldBlockForeground(actSettings, actAllowForeground)) {
+        refuseForegroundStep(opName, targetName)
+        return true
+      }
+      return false
+    }
+    /* Allowlist pre-check for every action branch: when the run is bound
+       to a known app, a policy change (or a stale binding) stops the run
+       BEFORE any input instead of after it. Unknown app means pre-launch:
+       the launch verification decides there, so launch skips this. */
+    const refuseIfAppNotAllowed = () => {
+      const app = String(run.snapshotApp || '')
+      if (!app) return false
+      const refusal = checkActAppAllowed(actSettings, app)
+      if (!refusal) return false
+      desktopRuns.appendStep(run.id, { kind: 'error', label: `Step refused: "${app}" not allowed` })
+      outcomes.push(`REFUSED (${refusal})`)
+      aborted = true
+      return true
+    }
+    let attempted = false
     const maxActions = actSettings.maxSteps > 0 ? actSettings.maxSteps : 50
     const maxRunMs = actSettings.maxRunMinutes > 0 ? actSettings.maxRunMinutes * 60000 : 0
     const runStartedAt = Date.parse(run.createdAt) || Date.now()
@@ -1732,7 +2238,7 @@ async function handleDesktopTool({ toolName, args, content, momai }) {
        runaway task stops itself instead of burning rounds forever. */
     const checkLimits = () => {
       if (actionCount >= maxActions) {
-        outcomes.push(`limite de passos atingido (${maxActions}) â€” pare aqui`)
+        outcomes.push(`limite de passos atingido (${maxActions}) — pare aqui`)
         desktopRuns.appendStep(run.id, { kind: 'error', label: `Limite de passos (${maxActions})` })
         aborted = true
         return false
@@ -1740,7 +2246,7 @@ async function handleDesktopTool({ toolName, args, content, momai }) {
       if (maxRunMs > 0 && Date.now() - runStartedAt > maxRunMs) {
         desktopRuns.finishRun(run.id, 'stopped')
         desktopRuns.appendStep(run.id, { kind: 'error', label: `Limite de tempo (${actSettings.maxRunMinutes} min)` })
-        outcomes.push(`limite de tempo atingido (${actSettings.maxRunMinutes} min) â€” run encerrada`)
+        outcomes.push(`limite de tempo atingido (${actSettings.maxRunMinutes} min) — run encerrada`)
         aborted = true
         return false
       }
@@ -1759,6 +2265,7 @@ async function handleDesktopTool({ toolName, args, content, momai }) {
           markSkipped('launch: skipped (empty query)')
           continue
         }
+        attempted = true
         const priorApp = String(run.snapshotApp || '')
         /* A launch starts a new window identity: drop any previous
            binding so the follow-up snapshot binds fresh. */
@@ -1779,6 +2286,10 @@ async function handleDesktopTool({ toolName, args, content, momai }) {
           /* fall through to the keystroke path below */
         }
         if (!launched) {
+          if (shouldBlockForeground(actSettings, actAllowForeground)) {
+            refuseForegroundStep('launch', query)
+            continue
+          }
           const res = await actInvoke({ action: 'winsearch', text: query })
           if (!res || res.ok !== true) {
             const detail = res && res.error ? res.error : 'unknown error'
@@ -1802,6 +2313,12 @@ async function handleDesktopTool({ toolName, args, content, momai }) {
           const where = taken ? `"${taken.snapshot.windowTitle || taken.snapshot.appName}"` : 'unknown window'
           const postApp = taken ? String(taken.snapshot.appName || '') : ''
           const postTitle = taken ? String(taken.snapshot.windowTitle || '') : ''
+          if (postApp && !desktopRuns.isAppAllowed(actSettings, postApp)) {
+            desktopRuns.appendStep(run.id, { kind: 'error', label: `Launch "${query}" blocked: app "${postApp}" not in allowed list` })
+            outcomes.push(`launch "${query}": FAILED (App "${postApp}" is not in the allowed list. Ask the user to allow it)`)
+            aborted = true
+            continue
+          }
           const unchanged = priorApp && postApp
             && priorApp.toLowerCase() === postApp.toLowerCase()
           /* Launch verification: a sent launch is not proof. Bind and
@@ -1824,6 +2341,13 @@ async function handleDesktopTool({ toolName, args, content, momai }) {
               reboundWindow = null
             }
             if (reboundWindow) {
+              const reboundRefusal = checkActAppAllowed(actSettings, reboundWindow.app)
+              if (reboundRefusal) {
+                desktopRuns.appendStep(run.id, { kind: 'error', label: `Launch "${query}" refused: ${reboundWindow.app} not allowed` })
+                outcomes.push(`launch "${query}": REFUSED (${reboundRefusal})`)
+                aborted = true
+                continue
+              }
               run.targetHwnd = normalizeHwnd(reboundWindow.hwnd)
               if (reboundWindow.app) run.snapshotApp = reboundWindow.app
               if (reboundWindow.title) run.snapshotTitle = reboundWindow.title
@@ -1838,7 +2362,15 @@ async function handleDesktopTool({ toolName, args, content, momai }) {
             continue
           }
           /* Bind the run to the launched window: later steps read and act
-             on this window even if the user clicks elsewhere. */
+             on this window even if the user clicks elsewhere. The allowlist
+             gates the preferred batched path exactly like snapshots do. */
+          const launchRefusal = checkActAppAllowed(actSettings, postApp)
+          if (launchRefusal) {
+            desktopRuns.appendStep(run.id, { kind: 'error', label: `Launch "${query}" refused: ${postApp || 'unknown app'} not allowed` })
+            outcomes.push(`launch "${query}": REFUSED (${launchRefusal})`)
+            aborted = true
+            continue
+          }
           if (taken) run.targetHwnd = normalizeHwnd(taken.snapshot.hwnd)
           desktopRuns.appendStep(run.id, { kind: 'action', label: launchLabel })
           if (recordFrames) await captureRunFrame(run, launchLabel, stepContext(taken ? taken.snapshot.appName : '', taken ? taken.snapshot.windowTitle : ''))
@@ -1856,14 +2388,14 @@ async function handleDesktopTool({ toolName, args, content, momai }) {
         const name = String(step.name || '').trim()
         /* No-name targeting: typing obviously goes to the first editable
            area (field, else document body); pressing a key anchors focus
-           on the first element. Clicking stays strict â€” a blind click can
+           on the first element. Clicking stays strict — a blind click can
            hit anything, so a nameless click fails loudly instead. */
         let effName = name
         let effRole = step.role
         let autoTarget = ''
         if (!effName && !effRole) {
           if (op === 'click') {
-            outcomes.push('click: FAILED (needs "name" â€” blind clicks are refused)')
+            outcomes.push('click: FAILED (needs "name" — blind clicks are refused)')
             desktopRuns.appendStep(run.id, { kind: 'error', label: 'click failed: no "name" given' })
             aborted = true
             continue
@@ -1884,14 +2416,29 @@ async function handleDesktopTool({ toolName, args, content, momai }) {
           effRole = String(picked.control || '')
           autoTarget = ` (auto-target "${effName || effRole}")`
         }
+        if (refuseIfAppNotAllowed()) continue
+        /* press is SendKeys by definition (no background pattern exists),
+           so it is refused before touching input when consent is missing. */
+        if (op === 'press' && shouldBlockForeground(actSettings, actAllowForeground)) {
+          refuseForegroundStep(op, effName || effRole)
+          continue
+        }
         const action = op === 'click' ? 'click' : op === 'type' ? 'setvalue' : 'press'
         const extra: Record<string, unknown> = op === 'click'
           ? {}
           : op === 'type'
-            ? { text: String(step.text || ''), submit: step.submit === true }
-            : { key: String(step.key || '') }
-        const res = await actOnName(action, effName, effRole, extra)
+            ? { text: String(step.text || ''), submit: isTrueFlag(step.submit) }
+            : { key: normalizePressKey(String(step.key || '')) }
+        attempted = true
+        const res = await actOnName(action, effName, effRole, extra, actAllowForeground)
         if (res.ok === true) {
+          if (refuseIfEscalated(op, effName || effRole, res)) continue
+          if (!desktopRuns.isAppAllowed(actSettings, String(run.snapshotApp || ''))) {
+            desktopRuns.appendStep(run.id, { kind: 'error', label: `${op} "${effName}" blocked: app "${run.snapshotApp}" not in allowed list` })
+            outcomes.push(`${op} "${effName}": FAILED (App "${run.snapshotApp}" is not in the allowed list)`)
+            aborted = true
+            continue
+          }
           await sleepMs(600)
           const stepLabel = op === 'click' ? t('clicked', res.label) : op === 'type' ? t('typed', res.label) : t('pressed', res.label)
           desktopRuns.appendStep(run.id, { kind: 'action', label: stepLabel })
@@ -1901,16 +2448,66 @@ async function handleDesktopTool({ toolName, args, content, momai }) {
           const refocusNote = res.refocused ? ' (brought the window back and retried)' : ''
           outcomes.push(`${op} "${effName || effRole}"${autoTarget}: ok ("${res.label}")${reboundNote}${staleNote}${refocusNote}`)
         } else {
+          /* The script stayed background-only per the guardrails: surface
+             the consent request instead of a plain failure. */
+          if (/background_unavailable/i.test(String((res && res.error) || ''))
+            && shouldBlockForeground(actSettings, actAllowForeground)) {
+            refuseForegroundStep(op, effName || effRole)
+            continue
+          }
+          const fallbackKey = autoPressFallbackKey(op, effName)
+          if (op === 'click' && fallbackKey) {
+            if (shouldBlockForeground(actSettings, actAllowForeground)) {
+              refuseForegroundStep('press', effName)
+              continue
+            }
+            let pressTarget = null
+            try {
+              const cached = run.snapshotId ? desktopRuns.getSnapshot(run.snapshotId) : null
+              const cachedNodes = cached && Array.isArray(cached.nodes) ? cached.nodes : []
+              const normTarget = (s) => uiaNodes.normalizeText(s).replace(/\s+/g, '')
+              pressTarget = cachedNodes.find((n) => normTarget(n.control) === 'edit')
+                || cachedNodes.find((n) => normTarget(n.control) === 'document')
+                || cachedNodes.find((n) => String(n.name || '').trim() !== '')
+                || null
+              if (!pressTarget) {
+                const taken = await actSnapshot('active')
+                const targetNodes = taken ? taken.snapshot.nodes : []
+                pressTarget = targetNodes.find((n) => normTarget(n.control) === 'edit')
+                  || targetNodes.find((n) => normTarget(n.control) === 'document')
+                  || targetNodes.find((n) => String(n.name || '').trim() !== '')
+                  || null
+              }
+            } catch {
+              pressTarget = null
+            }
+            if (pressTarget) {
+              const pressRes = await actOnName('press', String(pressTarget.name || ''), String(pressTarget.control || ''), { key: fallbackKey }, actAllowForeground)
+              if (pressRes && pressRes.ok === true) {
+                if (refuseIfEscalated('press', pressRes.label, pressRes)) continue
+                await sleepMs(600)
+                const stepLabel = t('pressed', pressRes.label)
+                desktopRuns.appendStep(run.id, { kind: 'action', label: stepLabel })
+                if (recordFrames) await captureRunFrame(run, stepLabel, stepContext(run.snapshotApp, run.snapshotTitle))
+                outcomes.push(`click "${effName}": ok (keyboard fallback "${fallbackKey}" via "${pressRes.label}")`)
+                continue
+              }
+            }
+          }
           desktopRuns.appendStep(run.id, { kind: 'error', label: `${op} "${effName}" failed: ${res.error}` })
           const hint = buildActFailHint({ op, effName, stale: res.stale === true, bound: normalizeHwnd(run.targetHwnd) })
           outcomes.push(`${op} "${effName}": FAILED (${res.error})${hint}`)
           aborted = true
         }
       } else if (op === 'close') {
+        if (refuseIfAppNotAllowed()) continue
         let closed = false
+        let refused = false
         for (const candidate of closeButtonCandidates()) {
-          const res = await actOnName('click', candidate.name, candidate.role, {})
+          attempted = true
+          const res = await actOnName('click', candidate.name, candidate.role, {}, actAllowForeground)
           if (res && res.ok === true) {
+            if (refuseIfEscalated(op, res.label, res)) { refused = true; break }
             await sleepMs(600)
             const stepLabel = t('closed', res.label)
             desktopRuns.appendStep(run.id, { kind: 'action', label: stepLabel })
@@ -1920,6 +2517,7 @@ async function handleDesktopTool({ toolName, args, content, momai }) {
             break
           }
         }
+        if (refused) continue
         if (!closed) {
           const taken = await actSnapshot('active')
           const nodes = taken ? taken.snapshot.nodes : []
@@ -1929,7 +2527,12 @@ async function handleDesktopTool({ toolName, args, content, momai }) {
             outcomes.push('close: FAILED (no target on screen)')
             aborted = true
           } else {
-            const res = await actOnName('press', String(picked.name || ''), String(picked.control || ''), { key: '%{F4}' })
+            if (shouldBlockForeground(actSettings, actAllowForeground)) {
+              refuseForegroundStep(op, run.snapshotApp || run.snapshotTitle || picked.name || '')
+              continue
+            }
+            attempted = true
+            const res = await actOnName('press', String(picked.name || ''), String(picked.control || ''), { key: '%{F4}' }, actAllowForeground)
             if (res.ok === true) {
               await sleepMs(600)
               const stepLabel = t('closed', run.snapshotApp || run.snapshotTitle || res.label)
@@ -1960,6 +2563,12 @@ async function handleDesktopTool({ toolName, args, content, momai }) {
            bar in any browser, then the address is typed and confirmed. The
            window handle below steers the keys to the bound window even when
            the user clicked elsewhere; the app check stays as a backstop. */
+        if (refuseIfAppNotAllowed()) continue
+        if (shouldBlockForeground(actSettings, actAllowForeground)) {
+          refuseForegroundStep('goto', checked.url)
+          continue
+        }
+        attempted = true
         const gotoHwnd = normalizeHwnd(run.targetHwnd)
         const res = await actInvoke({
           action: 'gotourl',
@@ -1968,7 +2577,7 @@ async function handleDesktopTool({ toolName, args, content, momai }) {
           ...(gotoHwnd ? { hwnd: gotoHwnd } : {}),
         })
         if (res && res.ok === true) {
-          await sleepMs(2500)
+          await sleepMs(NAVIGATION_SETTLE_MS)
           const taken = await actSnapshot('active')
           const where = taken ? `"${taken.snapshot.windowTitle || taken.snapshot.appName}"` : 'unknown window'
           const stepLabel = `${t('wentto', checked.url)} → ${where}`
@@ -1992,13 +2601,17 @@ async function handleDesktopTool({ toolName, args, content, momai }) {
 
     const finalScreen = await followupScreen(run, 'active', 40)
     await desktopRuns.emitRunEvent(momai, 'desktop_run_step', { runId: run.id, kind: 'action', label: `Task ${aborted ? 'stopped' : 'done'}: ${objective}` })
-    /* Terminal record for the loop guard above (best-effort). */
-    try {
-      const hist = Array.isArray(run.actHistory) ? run.actHistory : []
-      hist.push({ sig: callSig, ok: !aborted })
-      run.actHistory = hist.slice(-6)
-    } catch {
-      /* history is best-effort */
+    /* Terminal record for the loop guard above (best-effort): a run that
+       never attempted anything (pure guardrail refusal, skips) teaches
+       nothing, so retrying it with consent is never loop-blocked. */
+    if (attempted) {
+      try {
+        const hist = Array.isArray(run.actHistory) ? run.actHistory : []
+        hist.push({ sig: callSig, ok: !aborted })
+        run.actHistory = hist.slice(-6)
+      } catch {
+        /* history is best-effort */
+      }
     }
     const lines = outcomes.map((o, i) => `${i + 1}. ${o}`).join('\n')
     const finalText = finalScreen.text
@@ -2019,9 +2632,16 @@ async function handleDesktopTool({ toolName, args, content, momai }) {
     }
   }
 
-  /* â”€â”€ desktop_snapshot â”€â”€ */
+  /* ── desktop_snapshot ── */
   if (toolName === 'desktop_snapshot') {
     const scope = params.scope === 'desktop' ? 'desktop' : 'active'
+    /* Task-window default: without an explicit apps scope, a run already
+       bound to a window keeps reading THAT window even when the user
+       clicked elsewhere. No binding (fresh exploration) reads the
+       foreground, as before. */
+    const taskRun = desktopRuns.latestActiveRun()
+    const taskFresh = taskRun && Date.now() - Date.parse(taskRun.updatedAt) < 10 * 60 * 1000
+    const boundHwnd = scope === 'desktop' ? 0 : normalizeHwnd(taskFresh ? taskRun.targetHwnd : 0)
     /* Optional app scope (apps: "Name" or ["Name"]): read that program's
        window even when it sits behind the foreground one, so user clicks
        elsewhere don't hijack the read. */
@@ -2078,22 +2698,63 @@ async function handleDesktopTool({ toolName, args, content, momai }) {
         }
       }
     }
-    let dump = null
-    let lastError = ''
+    /* Explicit apps scope wins; otherwise the task binding wins over the
+       foreground. */
+    const explicitScope = scopedHwnd !== 0
+    scopedHwnd = pickSnapshotHwnd(scope, scopedHwnd, boundHwnd)
     // A freshly opened program may need a moment before its tree appears.
-    for (let attempt = 0; attempt < 2; attempt++) {
-      if (attempt > 0) await sleepMs(800)
-      try {
-        dump = await uiaProvider.dumpTree(scope, scopedHwnd)
-      } catch (err) {
-        lastError = err.message
-        dump = null
+    async function readTree(hwnd) {
+      let out = null
+      let err = ''
+      for (let attempt = 0; attempt < 2; attempt++) {
+        if (attempt > 0) await sleepMs(800)
+        try {
+          out = await uiaProvider.dumpTree(scope, hwnd)
+        } catch (e) {
+          err = e.message
+          out = null
+        }
+        if (out && out.ok === true && Array.isArray(out.nodes) && out.nodes.length >= 3) break
+        if (out && out.ok === true) err = ''
       }
-      if (dump && dump.ok === true && Array.isArray(dump.nodes) && dump.nodes.length >= 3) break
-      if (dump && dump.ok === true) lastError = ''
+      return { dump: out, lastError: err }
+    }
+    let read = await readTree(scopedHwnd)
+    let dump = read.dump
+    let lastError = read.lastError
+    if (scopedHwnd && (!dump || dump.boundStale === true) && !explicitScope) {
+      /* Bound window gone (no explicit scope to honor): re-find the same
+         app under a new handle; when the app itself is gone, fall back to
+         the foreground and drop the dead binding instead of failing. */
+      let reboundHwnd = 0
+      try {
+        const listed = await uiaProvider.listWindows()
+        const wins = listed && listed.ok === true && Array.isArray(listed.windows) ? listed.windows : []
+        reboundHwnd = resolveStaleBinding(taskFresh ? taskRun.snapshotApp : '', wins)
+      } catch {
+        reboundHwnd = 0
+      }
+      if (reboundHwnd) {
+        scopedHwnd = reboundHwnd
+      } else {
+        if (taskRun) {
+          try {
+            taskRun.targetHwnd = 0
+          } catch {
+            /* binding cleanup is best effort */
+          }
+        }
+        scopedHwnd = 0
+      }
+      read = await readTree(scopedHwnd)
+      dump = read.dump
+      lastError = read.lastError
     }
     if (scopedHwnd && (!dump || dump.boundStale === true)) {
-      return { tool: toolName, instruction: `"${scopedQuery}" closed before it could be read — launch it again, then snapshot.` }
+      if (explicitScope) {
+        return { tool: toolName, instruction: `"${scopedQuery}" closed before it could be read — launch it again, then snapshot.` }
+      }
+      return { tool: toolName, instruction: 'The task window closed before it could be read — launch it again, then snapshot.' }
     }
     if (!dump || dump.ok !== true) {
       const detail = (dump && dump.error ? dump.error : lastError) || 'unknown error'
@@ -2170,11 +2831,14 @@ async function handleDesktopTool({ toolName, args, content, momai }) {
         stepContext(snapshot.appName, snapshot.windowTitle)
       )
     }
-    const header = [
-      `App: ${snapshot.appName || 'unknown'}`,
-      `Window: ${snapshot.windowTitle || 'unknown'}`,
-      `snapshotId: ${snapshotId} (refs expire in ~90s)`,
-    ].join('\n') + focusWarning
+    const header = formatSnapshotHeader({
+      appName: snapshot.appName,
+      windowTitle: snapshot.windowTitle,
+      snapshotId,
+      shown: Math.min(snapshot.nodes.length, 60),
+      total: snapshot.totalSeen || snapshot.nodes.length,
+      focusWarning,
+    })
     const list = uiaNodes.formatSnapshotForLlm(snapshot, 60)
     const tail = snapshot.truncated ? '\n(List truncated: use desktop_find to search.)' : ''
     const opaque = uiaNodes.isTreeOpaque(snapshot.nodes) ? opaqueScreenWarning() : ''
@@ -2186,7 +2850,7 @@ async function handleDesktopTool({ toolName, args, content, momai }) {
     }
   }
 
-  /* â”€â”€ desktop_find â”€â”€ */
+  /* ── desktop_find ── */
   if (toolName === 'desktop_find') {
     const query = String(params.query || '').trim()
     if (!query) {
@@ -2201,7 +2865,7 @@ async function handleDesktopTool({ toolName, args, content, momai }) {
     }
     const matches = uiaNodes.findNodes(resolved.snapshot.nodes, query, params.role)
     if (matches.length === 0) {
-      return { tool: toolName, instruction: `No element matching "${query}" in this snapshot.` }
+      return { tool: toolName, instruction: buildFindMissInstruction(query, resolved.snapshot.truncated) }
     }
     const lines = matches.map((n) => uiaNodes.formatNodeLine(n))
     /* Finds also join the timeline + replay like every desktop tool call. */
@@ -2223,7 +2887,7 @@ async function handleDesktopTool({ toolName, args, content, momai }) {
     }
   }
 
-  /* â”€â”€ desktop_click / desktop_type / desktop_press â”€â”€ */
+  /* ── desktop_click / desktop_type / desktop_press ── */
   if (toolName === 'desktop_click' || toolName === 'desktop_type' || toolName === 'desktop_press') {
     const resolved = resolveDesktopSnapshot(params.snapshotId)
     if (resolved.expired) {
@@ -2254,23 +2918,25 @@ async function handleDesktopTool({ toolName, args, content, momai }) {
     let payload
     /* The snapshot's window handle rides along so path-mode resolution
        starts at the snapshot's own window (refs stay valid even when the
-       user clicked elsewhere); patterns then act without focus. */
+       user clicked elsewhere); patterns then act without focus. The
+       background-only flag rides along too when consent is missing. */
     const snapshotHwnd = normalizeHwnd(resolved.snapshot.hwnd)
     const hwndField = snapshotHwnd ? { hwnd: snapshotHwnd } : {}
+    const consentFlag = foregroundPayloadFlag(settings, params.allowForeground)
     if (toolName === 'desktop_click') {
-      payload = { path: node.path, rect: node.rect, name: node.name, app: resolved.snapshot.appName, action: 'click', ...hwndField }
+      payload = { path: node.path, rect: node.rect, name: node.name, app: resolved.snapshot.appName, action: 'click', ...hwndField, ...consentFlag }
     } else if (toolName === 'desktop_type') {
       const text = String(params.text || '')
       if (!text) {
         return { tool: toolName, instruction: 'Tell me the text to type (text).' }
       }
-      payload = { path: node.path, rect: node.rect, name: node.name, app: resolved.snapshot.appName, action: 'setvalue', text, submit: params.submit === true, ...hwndField }
+      payload = { path: node.path, rect: node.rect, name: node.name, app: resolved.snapshot.appName, action: 'setvalue', text, submit: isTrueFlag(params.submit), ...hwndField, ...consentFlag }
     } else {
-      const key = String(params.key || '')
+      const key = normalizePressKey(String(params.key || ''))
       if (!key) {
         return { tool: toolName, instruction: 'Tell me the key to press (key, e.g. {ENTER}).' }
       }
-      payload = { path: node.path, rect: node.rect, name: node.name, app: resolved.snapshot.appName, action: 'press', key, ...hwndField }
+      payload = { path: node.path, rect: node.rect, name: node.name, app: resolved.snapshot.appName, action: 'press', key, ...hwndField, ...consentFlag }
     }
     async function attemptAction(target) {
       try {
@@ -2316,12 +2982,39 @@ async function handleDesktopTool({ toolName, args, content, momai }) {
         /* keep the original failure below */
       }
     }
+    /* Shared autofocus (same as desktop_act): when the failure smells like
+       stolen focus, bring the snapshot's window back once and retry — but
+       only with foreground consent, since refocusing steals input. */
+    if ((!result || result.ok !== true)
+      && shouldAutoRefocus({ settings, consent: params.allowForeground, hwnd: snapshotHwnd, error: result && result.error })) {
+      try {
+        const refocus = await uiaProvider.invokeAction({ action: 'focuswindow', hwnd: snapshotHwnd })
+        if (refocus && refocus.ok === true) {
+          result = await attemptAction(payload)
+          if (result && result.ok === true) {
+            desktopRuns.appendStep(run.id, { kind: 'info', label: `${actionLabel} — brought the window back and retried` })
+          }
+        }
+      } catch {
+        /* keep the original failure below */
+      }
+    }
     if (result && result.ok === true) {
-      /* Fresh tree rides back inside the action result (same session):
-         only dump again when the action took a fallback path without one. */
-      const followup = ingestReturnedTree(run, result, resolved.snapshot.scope, 18)
-        || await followupScreen(run, resolved.snapshot.scope, 18)
-      desktopRuns.appendStep(run.id, { kind: 'action', label: `${actionLabel} â€” done` })
+      /* A submitted web address navigates the browser: the tree riding
+         back with the action is pre-navigation state, so settle for the
+         page and re-read instead of reporting the old screen. */
+      let followup = null
+      if (toolName === 'desktop_type' && isWebAddressSubmit(params.text, params.submit)) {
+        await sleepMs(NAVIGATION_SETTLE_MS)
+        followup = await followupScreen(run, resolved.snapshot.scope, 18)
+      }
+      if (!followup) {
+        /* Fresh tree rides back inside the action result (same session):
+           only dump again when the action took a fallback path without one. */
+        followup = ingestReturnedTree(run, result, resolved.snapshot.scope, 18)
+          || await followupScreen(run, resolved.snapshot.scope, 18)
+      }
+      desktopRuns.appendStep(run.id, { kind: 'action', label: `${actionLabel} — done` })
       await desktopRuns.emitRunEvent(momai, 'desktop_run_step', { runId: run.id, kind: 'action', label: actionLabel })
       if (settings.recordVisuals !== false) {
         await captureRunFrame(run, actionLabel, stepContext(resolved.snapshot.appName, resolved.snapshot.windowTitle))
@@ -2331,7 +3024,7 @@ async function handleDesktopTool({ toolName, args, content, momai }) {
         ? `\nPara DIGITAR, o campo certo e a ref ${target.ref} ("${target.name || target.control}"): chame desktop_type {ref: ${target.ref}, snapshotId: "${followup.snapshotId}", text: "<texto da tarefa>"}.`
         : ''
       const nextStep = followup.text
-        ? `${actionLabel} done.\nNOVA TELA (as refs antigas morreram, use SOMENTE estas):\n${followup.text}${typeHint}\nPROXIMO PASSO OBRIGATORIO: continue a tarefa AGORA com a chamada acima, escrevendo 1 linha de progresso junto (rodadas mudas cortam suas tools). Quando a tarefa estiver CONCLUIDA (nada mais a fazer), chame desktop_stop_run para encerrar e mostrar o card final. Nao escreva a resposta final antes de concluir.`
+        ? `${actionLabel} done.\nNOVA TELA (as refs antigas morreram, use SOMENTE estas):\n${followup.text}${typeHint}\nPROXIMO PASSO OBRIGATORIO: continue a tarefa AGORA com a chamada acima, escrevendo 1 linha de progresso junto (rodadas mudas cortam suas tools). Quando a tarefa estiver CONCLUIDA (nada mais a fazer), chame desktop_stop_run para encerrar e mostrar o card final. ${DIR_NO_FINAL_YET}`
         : JSON.stringify({
           ok: true,
           action: actionLabel,
@@ -2360,16 +3053,16 @@ async function handleDesktopTool({ toolName, args, content, momai }) {
     /* Failures stay text-only; the card comes with the next success or stop. */
     return {
       tool: toolName,
-      instruction: `${actionLabel} failed: ${detail}. The window may have changed â€” take a new desktop_snapshot and retry.`,
+      instruction: `${actionLabel} failed: ${detail}. The window may have changed — take a new desktop_snapshot and retry.`,
     }
   }
 
   return { tool: toolName, instruction: `Unknown desktop tool: ${toolName}` }
 }
 
-/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+/* ──────────────────────────────────────────────
    Search Terms
-   â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+   ────────────────────────────────────────────── */
 
 function extractSearchTerms(raw) {
   const q = String(raw || '').trim()
@@ -2495,12 +3188,77 @@ function requiresForegroundEscalation(result) {
   return /background_unavailable|opaque|canvas|needs foreground/i.test(error)
 }
 
+/* Generic truthy flag: hosts stringify booleans ("True"), so true, "true"
+   (any case, trimmed) and 1 all count. Anything else is false. */
+function isTrueFlag(value) {
+  if (value === true) return true
+  if (typeof value === 'number') return value === 1
+  if (typeof value === 'string') return value.trim().toLowerCase() === 'true'
+  return false
+}
+
+/* Generic falsy flag: mirror of isTrueFlag for explicit opt-outs. */
+function isFalseFlag(value) {
+  if (value === false) return true
+  if (typeof value === 'string') return value.trim().toLowerCase() === 'false'
+  return false
+}
+
+/* Explicit foreground consent, tolerant to hosts that stringify booleans
+   ("True"). Anything else stays a refusal — consent must be explicit. */
+function isForegroundConsent(value) {
+  return isTrueFlag(value)
+}
+
 function shouldBlockForeground(settings, explicitConsent) {
-  const consent = explicitConsent === true
+  const consent = isForegroundConsent(explicitConsent)
   if (settings && settings.backgroundOnly === true) return !consent
   if (settings && settings.askBeforeForeground === true) return !consent
   if (settings && settings.askBeforeForeground === undefined) return !consent
   return false
+}
+
+/* Foreground policy for the batched paths (desktop_act, desktop_launch):
+   pattern-first ops (click/type) attempt the background and are judged by
+   the delivery they report; inherently-foreground ops (goto/press/keystroke
+   launches) are refused BEFORE touching input. Same rule as the primitives. */
+function isInherentlyForegroundOp(op) {
+  const v = String(op || '').trim().toLowerCase()
+  return v === 'goto' || v === 'press' || v === 'winsearch'
+}
+
+/* Allowlist verdict for a window desktop_act just bound to: null when the
+   run may continue, refusal text when it must stop. Same gate as the
+   snapshot/primitive path, now covering the preferred batched tool. */
+function checkActAppAllowed(settings, appName) {
+  if (desktopRuns.isAppAllowed(settings, appName)) return null
+  const app = String(appName || 'unknown').trim() || 'unknown'
+  return `App "${app}" is not in the allowed list. Ask the user to allow it on the MomAI Desktop page, then run again.`
+}
+
+function buildForegroundRefusal(op, label) {
+  const name = String(op || 'this step').trim() || 'this step'
+  const target = String(label || '').trim()
+  return `${name} "${target}" needs the foreground (mouse/keyboard) but the guardrails forbid it. Ask the user for permission, then call desktop_act again with allowForeground:true — or relax the guardrail on the MomAI Desktop page.`
+}
+
+/* Shared autofocus decision (primitives + desktop_act): refocus the acted
+   window and retry once when the failure smells like stolen focus — but
+   only when the foreground is allowed, since refocusing steals input.
+   Pure so the policy stays covered by tests. */
+function shouldAutoRefocus(input) {
+  const src = input && typeof input === 'object' ? input : {}
+  if (!normalizeHwnd(src.hwnd)) return false
+  if (shouldBlockForeground(src.settings, src.consent)) return false
+  return shouldRefocusWindow(src.hwnd, src.error)
+}
+
+/* Provider contract: when the guardrails forbid the foreground without
+   consent, the automation script stays background-only and reports
+   background_unavailable instead of moving the mouse or typing. Pure so
+   the flag rule stays covered by tests. */
+function foregroundPayloadFlag(settings, consent) {
+  return shouldBlockForeground(settings, consent) ? { backgroundOnly: true } : {}
 }
 
 function buildForegroundConsentMessage(appName, actionLabel) {
@@ -2516,9 +3274,9 @@ async function debugLog(msg, momai) {
   } catch {}
 }
 
-/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+/* ──────────────────────────────────────────────
    Module Exports
-   â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+   ────────────────────────────────────────────── */
 
 module.exports = {
   tools: [
@@ -2547,26 +3305,29 @@ module.exports = {
     },
     {
       name: 'desktop_launch',
-      description: 'Opens any PROGRAM via Windows Search (Start menu): presses the Windows key, types the name and confirms. Preferred way to open programs (Edge, Firefox, Calculator, Settings, Store apps). Needs no snapshot and no focused window. For FILES and FOLDERS use search_local_items instead.',
+      description: 'Opens any PROGRAM via Windows Search (Start menu): presses the Windows key, types the name and confirms. Needs no snapshot and no focused window. Prefers a background direct launch; the keystroke fallback needs allowForeground:true after the user confirms, unless the guardrails allow it. For FILES and FOLDERS use search_local_items instead. If the request already contains a web address, prefer desktop_act once with launch plus goto instead of calling this tool first.',
       parameters: {
         type: 'object',
         required: ['query'],
         properties: {
-          query: { type: 'string', description: 'Program name to launch (e.g. Calculadora, Edge, Firefox)' },
+          query: { type: 'string', description: 'Program name to launch' },
+          allowForeground: { type: 'boolean', description: 'Explicit user consent to simulate the Start menu with keystrokes when the background launch misses' },
         },
       },
     },
     {
       name: 'desktop_act',
-      description: 'Runs a WHOLE desktop task in ONE call (preferred for open-then-click-then-type flows): pass steps like [{op:"launch",query:"Word"},{op:"click",name:"Documento em branco"},{op:"type",role:"Document",text:"Hello word"},{op:"close"}]. Ops: launch (program via Windows Search), click/type/press (by visible element "name" and optional "role", resolved on a fresh screen with retries: name+role then name only; "name" may be empty when "role" alone identifies it), close (window Close button, else Alt+F4), goto (focus address bar via Ctrl+L, type URL, Enter), wait (ms). The task binds to the acted window: later steps read and act on that window even when focus moved elsewhere — do not relaunch while it exists. Page limits apply (max action steps, max minutes). Use the primitives (desktop_snapshot/click/type) only to explore an unknown screen first. Opaque screens (canvas, games) are not clickable â€” use desktop_describe to answer what is on them.',
+      description: 'Runs a WHOLE desktop task in ONE call (preferred for open-then-click-then-type flows): pass steps like [{op:"launch",query:"Word"},{op:"click",name:"Documento em branco"},{op:"type",role:"Document",text:"Hello word"},{op:"close"}]. For Calculator prefer press keys over button clicks (digits/operators fall back to keyboard automatically; pass record:false to skip replay frames for speed). When the request contains a web address, combine launch plus goto in this same call instead of separate launch and navigate rounds. Ops: launch (program via Windows Search), click/type/press (by visible element "name" and optional "role", resolved on a fresh screen with retries; "name" may be empty when "role" alone identifies it), close (window Close button, else Alt+F4), goto (focus address bar via Ctrl+L, type URL, Enter), scroll (page keys on a target: direction up|down|top|bottom, amount, max 10), select (open dropdown "name", then click "option"), wait (ms). The task binds to the acted window: later steps read and act on that window even when focus moved elsewhere — do not relaunch while it exists. Page limits apply (max action steps, max minutes). Use the primitives (desktop_snapshot/click/type) only to explore an unknown screen first. Opaque screens (canvas, games) are not clickable: use desktop_describe to answer what is on them. Foreground steps (press/goto, mouse/keyboard fallbacks) are refused while the guardrails forbid them: ask the user, then repeat the call with allowForeground:true. Keep batches short (10 steps or fewer) and deterministic; split long tasks across calls with a snapshot in between. For unknown screens or branching flows, use the primitives with per-step verification instead.',
       parameters: {
         type: 'object',
         required: ['steps'],
         properties: {
           objective: { type: 'string', description: 'Short goal shown on the MomAI Desktop page' },
+          allowForeground: { type: 'boolean', description: 'Explicit user consent for the whole call to take over mouse/keyboard when background patterns are unavailable' },
+          record: { type: 'boolean', description: 'Set false to skip replay screenshots for speed (no visual frames stored)' },
           steps: {
             type: 'array',
-            description: 'Steps in order. click/type/press need "name" (visible element name) and optional "role". type needs "text" (+optional submit:true). press needs "key" (SendKeys syntax). wait needs "ms".',
+            description: 'Steps in order. click/type/press need "name" (visible element name) and optional "role". type needs "text" (+optional submit:true). press needs "key" (SendKeys syntax). scroll needs "direction" (up|down|top|bottom, +optional amount, +optional name/role target). select needs "name" (dropdown) and "option" (+optional role). wait needs "ms".',
             items: { type: 'object' },
           },
         },
@@ -2574,7 +3335,7 @@ module.exports = {
     },
     {
       name: 'desktop_snapshot',
-      description: 'Reads a window through the Windows accessibility tree and lists clickable elements as numbered refs. Always call this first before desktop_find/click/type/press, and again whenever the screen changes. Element analysis must use this tree, never pixel coordinates.',
+      description: 'Reads a window through the Windows accessibility tree and lists clickable elements as numbered refs. Defaults to the task window (bound by launch/act), so user clicks elsewhere don\'t hijack the read; without a bound task reads the foreground window. Use scope:"desktop" for the whole desktop, or apps:["Name"] to force a program even behind the foreground. Always call this first before desktop_find/click/type/press, and again whenever the screen changes. Element analysis must use this tree, never pixel coordinates.',
       parameters: {
         type: 'object',
         properties: {
@@ -2586,7 +3347,7 @@ module.exports = {
     },
     {
       name: 'desktop_find',
-      description: 'Searches the last desktop_snapshot for an element by visible name. Returns matching refs.',
+      description: 'Searches the last desktop_snapshot for an element by visible name. Returns matching refs. On a miss, take one fresh desktop_snapshot instead of searching again.',
       parameters: {
         type: 'object',
         required: ['query'],
@@ -2687,11 +3448,11 @@ module.exports = {
         properties: {
           allowedApps: { type: 'array', description: 'Process names allowed for automation (empty allows all)', items: { type: 'string' } },
           recordVisuals: { type: 'boolean', description: 'Save one screenshot per step for the replay (default true)' },
-          maxSteps: { type: 'number', description: 'Max action steps per desktop_act run (default 10)' },
+          maxSteps: { type: 'number', description: 'Max action steps per desktop_act run (default 50)' },
           maxRunMinutes: { type: 'number', description: 'Max minutes per run before it stops itself, 0 disables (default 10)' },
           safeStop: { type: 'boolean', description: 'Stop the run when the foreground app changes unexpectedly (default true)' },
           backgroundOnly: { type: 'boolean', description: 'Never take over mouse or keyboard; only background patterns and direct launches (default false)' },
-          askBeforeForeground: { type: 'boolean', description: 'Ask for explicit consent before any foreground takeover (default true)' },
+          askBeforeForeground: { type: 'boolean', description: 'Ask for explicit consent before any foreground takeover (default false)' },
         },
       },
     },
@@ -2722,12 +3483,12 @@ module.exports = {
     const text = String(content || '').trim()
     await debugLog(`execute called: toolName=${toolName}, text="${text.slice(0, 80)}"`, momai)
 
-    /* â”€â”€ desktop_* (computer use via accessibility tree) â”€â”€ */
+    /* ── desktop_* (computer use via accessibility tree) ── */
     if (typeof toolName === 'string' && toolName.startsWith('desktop_')) {
       return await handleDesktopTool({ toolName, args, content, momai })
     }
 
-    /* â”€â”€ open_local_item â”€â”€ */
+    /* ── open_local_item ── */
     if (toolName === 'open_local_item') {
       const targetPath = String(args?.path || '').trim()
       const targetName = String(args?.name || path.basename(targetPath)).trim()
@@ -2753,7 +3514,7 @@ module.exports = {
       }
     }
 
-    /* â”€â”€ search_local_items â”€â”€ */
+    /* ── search_local_items ── */
     const rawQuery = toolName === 'search_local_items' ? (String(args?.query || content || '')).trim() : text
     const searchTerms = extractSearchTerms(rawQuery)
     await debugLog(`search: raw="${rawQuery.slice(0, 80)}" terms="${searchTerms.slice(0, 80)}"`, momai)
@@ -2842,8 +3603,8 @@ module.exports = {
   },
 }
 
-/* FunÃ§Ãµes puras exportadas apenas para testes unitÃ¡rios (sem I/O).
-   O host lÃª apenas `.tools` e `.execute`; este campo Ã© aditivo e nÃ£o
+/* Funções puras exportadas apenas para testes unitários (sem I/O).
+   O host lê apenas `.tools` e `.execute`; este campo é aditivo e não
    altera o comportamento de runtime. */
 module.exports.__internals = {
   normalizeAccents,
@@ -2860,7 +3621,21 @@ module.exports.__internals = {
   closeButtonCandidates,
   normalizeGotoUrl,
   escapeSendKeysText,
+  extractFirstWebUrl,
+  buildFindMissInstruction,
+  getScanCacheTtlMs,
+  opaqueScreenWarning,
+  classifyLaunchScreen,
+  isWebAddressSubmit,
+  getNavigationSettleMs,
+  t,
   normalizeHwnd,
+  formatSnapshotHeader,
+  pickSnapshotHwnd,
+  resolveStaleBinding,
+  isForegroundConsent,
+  computeFramesTruncation,
+  shouldFlagOpaqueScreen,
   shouldRebindWindow,
   doesLaunchMatchApp,
   buildLaunchOutcome,
@@ -2879,6 +3654,24 @@ module.exports.__internals = {
   isShellAppsFolderPath,
   requiresForegroundEscalation,
   shouldBlockForeground,
+  isInherentlyForegroundOp,
+  checkActAppAllowed,
+  buildForegroundRefusal,
+  foregroundPayloadFlag,
+  isTrueFlag,
+  isFalseFlag,
+  shouldAutoRefocus,
+  normalizePressKey,
   buildForegroundConsentMessage,
   framesBaseDir,
+  autoPressFallbackKey,
+  resolveRecordFrames,
+  collapseCalculatorPressSteps,
+  normalizeCalculatorSteps,
+  buildScrollKeys,
+  normalizeSelectScrollSteps,
+  isCalculatorAppName,
+  stepsTargetCalculator,
 }
+
+

@@ -13,6 +13,7 @@ interface RunCardData {
   status?: string
   objective?: string
   previewThumb?: string
+  screenOpaque?: boolean
 }
 
 const IMAGE_MS = 1500
@@ -39,7 +40,7 @@ export default function DesktopRunCard({ data }: { data?: RunCardData }) {
     setIndex(0)
     if (!runId) return
     getFrames(runId)
-      .then((list) => {
+      .then(({ frames: list }) => {
         if (cancelled) return
         const usable = (list || []).filter(
           (f) => f && typeof f.dataUrl === 'string' && f.dataUrl.length > 0
@@ -89,6 +90,9 @@ export default function DesktopRunCard({ data }: { data?: RunCardData }) {
         {data.objective || 'MomAI Desktop'}
         <span className="text-text-muted"> • {statusLabel(status, t)}</span>
       </p>
+      {data.screenOpaque === true ? (
+        <p className="px-4 pb-2 text-[11px] text-text-muted">{t('card.opaqueHint')}</p>
+      ) : null}
     </div>
   )
 }

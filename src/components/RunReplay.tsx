@@ -8,7 +8,7 @@ import { useI18n } from '../hooks/useI18n'
 
 const IMAGE_MS = 1500
 
-export default function RunReplay({ frames }: { frames: ReplayFrame[] }) {
+export default function RunReplay({ frames, truncated }: { frames: ReplayFrame[]; truncated?: boolean }) {
   const { t } = useI18n()
   const [index, setIndex] = useState(0)
   const [playing, setPlaying] = useState(true)
@@ -56,6 +56,7 @@ export default function RunReplay({ frames }: { frames: ReplayFrame[] }) {
       </div>
       <p className="text-[12px] text-text-muted">
         {index + 1}/{frames.length}
+        {truncated === true ? ` • ${t('replay.truncated')}` : ''}
       </p>
       <div className="flex items-center gap-2">
         <button

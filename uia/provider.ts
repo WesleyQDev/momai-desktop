@@ -225,19 +225,34 @@ async function captureAllScreens() {
 }
 
 /**
+ * Picks one captured display by index for describeScreen: out-of-range or
+ * missing values return null so the caller falls back to the primary shot.
+ */
+function pickDisplayShot(shots, screen) {
+  const list = Array.isArray(shots) ? shots : []
+  if (list.length === 0) return null
+  if (screen === undefined || screen === null || screen === '') return null
+  const idx = Number(screen)
+  if (!Number.isFinite(idx)) return null
+  const at = Math.trunc(idx)
+  if (at < 0 || at >= list.length) return null
+  return list[at]
+}
+
+/**
  * Describes what's on screen for the model (detail questions, tricky
  * areas). Reuses the host route POST /extensions/llm/vision (same
  * contract the momai-vision extension uses: Bearer session token,
  * {image_base64, prompt, max_tokens}). Returns {ok, text} or
  * {ok:false, unavailable:true, error} when no vision model is on.
  */
-async function describeScreen(question) {
+async function describeScreen(question, screen) {
   const apiUrl = String(process.env.MOMAI_API_URL || '').replace(/\/$/, '')
   const token = String(process.env.MOMAI_SESSION_TOKEN || '')
   if (!apiUrl) return { ok: false, unavailable: true, error: 'Host API URL unavailable' }
   const shots = await captureAllScreens()
   if (shots.length === 0) return { ok: false, error: 'Screenshot failed on every display.' }
-  const shot = shots[0]
+  const shot = pickDisplayShot(shots, screen) || shots[0]
   const prompt = String(question || 'Descreva em detalhes o que aparece nesta screenshot do computador.').slice(0, 500)
   let res = null
   try {
@@ -298,4 +313,8 @@ module.exports = {
   listDisplays,
   captureAllScreens,
   describeScreen,
+}
+
+module.exports.__internals = {
+  pickDisplayShot,
 }

@@ -18,14 +18,14 @@ para mostrar ao usuário (`desktop_screenshot`) e para detalhar a tela
 | --- | --- |
 | `search_local_items {query}` | Busca programas, arquivos e pastas pelo nome (uma vez só, decida pelo score; inclui apps da Loja como Calculadora via shell:AppsFolder) |
 | `open_local_item {path, name?}` | Abre pelo caminho absoluto da busca ou shell:AppsFolder, sem mover mouse nem teclado |
-| `desktop_launch {query}` | Abre PROGRAMAS pelo índice direto em segundo plano (Edge, Firefox, Calculadora, Configurações). Jeito preferido de abrir programa: sem snapshot, sem foco, sem simular o Iniciar |
-| `desktop_act {objective?, steps}` | Executa a TAREFA INTEIRA numa chamada (jeito preferido p/ sequências): steps `[{op:"launch",query}, {op:"click",name,role?}, {op:"type",name,text,submit?}, {op:"press",name?,key}, {op:"close"}, {op:"goto",url}, {op:"wait",ms?}]`. `close` fecha a janela (botão Fechar/Close, senão Alt+F4). `goto` vai para um endereço no navegador aberto (Ctrl+L, digita, Enter). Se clique num dígito falhar, tente `press` com a tecla. Resolve nomes na tela fresca com retries (nome+papel, depois só nome); respeita os limites do page |
+| `desktop_launch {query, allowForeground?}` | Abre PROGRAMAS pelo índice direto em segundo plano (Edge, Firefox, Calculadora, Configurações). Jeito preferido de abrir programa: sem snapshot, sem foco, sem simular o Iniciar. O fallback por keystrokes exige allowForeground:true com a confirmação do usuário |
+| `desktop_act {objective?, steps, record?, allowForeground?}` | Executa a TAREFA INTEIRA numa chamada (jeito preferido p/ sequências curtas e certas, lotes de 10 passos ou menos): steps `[{op:"launch",query}, {op:"click",name,role?}, {op:"type",name,text,submit?}, {op:"press",name?,key}, {op:"scroll",name?,direction?,amount?}, {op:"select",name,option,role?}, {op:"close"}, {op:"goto",url}, {op:"wait",ms?}]`. `close` fecha a janela (botão Fechar/Close, senão Alt+F4). `goto` vai para um endereço no navegador aberto (Ctrl+L, digita, Enter). `scroll` rola com PageUp/PageDown/Home/End (até 10 páginas). `select` abre o dropdown e clica na opção. Para Calculadora prefira `press` com a tecla (`record:false` pula o replay e vai mais rápido; clique em dígito cai sozinho para teclado). Resolve nomes na tela fresca com retries (nome+papel, depois só nome); respeita os limites do page. Passos de primeiro plano (`press`, `goto`, fallbacks de mouse/teclado) são recusados enquanto os guardrails proibirem: peça ao usuário e repita a chamada com allowForeground:true |
 
 ## Ferramentas de automação (computer use)
 
 | Ferramenta | Uso |
 | --- | --- |
-| `desktop_snapshot {scope?, objective?, apps?}` | Lê a janela ativa e lista os elementos como refs numeradas. Com `apps: ["Nome"]` lê esse programa mesmo atrás da janela ativa (abre sozinho em 2º plano se fechado). Chame sempre antes de clicar/digitar |
+| `desktop_snapshot {scope?, objective?, apps?}` | Lê a janela da tarefa (amarrada por launch/act — cliques do usuário em outra janela não desviam a leitura) e lista os elementos como refs numeradas. Sem tarefa amarrada, lê a janela ativa. Com `apps: ["Nome"]` força esse programa mesmo atrás da janela ativa (abre sozinho em 2º plano se fechado). Chame sempre antes de clicar/digitar |
 | `desktop_find {query, role?, snapshotId?}` | Procura um elemento pelo nome visível no último snapshot |
 | `desktop_click {ref, snapshotId?}` | Clica no elemento da ref (tenta o padrão nativo primeiro) |
 | `desktop_type {ref, text, submit?, snapshotId?}` | Digita num campo da ref (`submit:true` dá Enter) |
@@ -42,6 +42,7 @@ para mostrar ao usuário (`desktop_screenshot`) e para detalhar a tela
 
 - "abra o chrome" → `desktop_launch {query: "chrome"}`
 - "abra a calculadora" → `desktop_launch {query: "calculadora"}`
+- "abra a calculadora e faça 10*5 e feche" → `desktop_act` com `record:false` e `[{op:"launch",query:"calculadora"},{op:"press",key:"10*5{ENTER}"},{op:"close"}]` — um `press` com a conta inteira vale por vários dígitos (também aceito em passos separados, que juntamos sozinhos); nunca clique em dígito, sempre `press`; dígitos aceitam nomes por extenso e IDs internos, e `+` vai escapado sozinho
 - "abra o navegador e vá para <endereço>" → `desktop_act` com `[{op:"launch",query:"<navegador>"},{op:"goto",url:"<endereço>"}]`
 - "abra minha pasta de Downloads" → `search_local_items` + `open_local_item`
 - "clique em Salvar no Bloco de Notas" → `desktop_snapshot` → `desktop_find {query: "Salvar"}` → `desktop_click {ref}`
@@ -55,24 +56,32 @@ Toda tarefa composta segue o mesmo encadeamento. Nunca pare no meio para
 perguntar e nunca repita `search_local_items` com paráfrases: uma busca
 basta, decida pelo score.
 
- 1. Para QUALQUER tarefa com 2+ passos (abrir → clicar → digitar),
-    SEMPRE comece com `desktop_act` e a sequência inteira NUMA chamada —
-    ele resolve cada nome na tela fresca, espera o app abrir e tenta de
-    novo sozinho. A tarefa fica amarrada à janela aberta: mesmo que o
-    usuário clique em outro lugar, ela continua na mesma janela sem
-    reabrir — só reabra se a resposta disser que a janela sumiu.
-    Depois de `desktop_launch`, continue com `desktop_act` (o resto inteiro
-    NUMA chamada), não com primitivas soltas. Para preencher vários
-    campos/células, digite e navegue com Tab/Enter em vez de clicar um por um.
-    TASK DONE confirma só os passos: confira o objetivo e continue com outro
-    `desktop_act` se faltar algo — só resuma no final, nunca despeje manual.
-    NÃO faça a sequência manualmente com as primitivas.
-   Use as primitivas (`desktop_snapshot` → `desktop_find` →
-   `desktop_click` / `desktop_type`) SÓ para explorar uma tela
-   desconhecida antes de montar o `desktop_act`, ou quando o `desktop_act`
-   falhar 2 vezes seguidas.
+  1. Para QUALQUER tarefa com 2+ passos (abrir → clicar → digitar), prefira
+     `desktop_act` em LOTES CURTOS (10 passos ou menos) e determinísticos —
+     ele resolve cada nome na tela fresca, espera o app abrir e tenta de
+     novo sozinho. A tarefa fica amarrada à janela aberta: mesmo que o
+     usuário clique em outro lugar, ela continua na mesma janela sem
+     reabrir — só reabra se a resposta disser que a janela sumiu.
+     Tarefa longa? Divida em vários `desktop_act` com snapshot entre eles,
+     conferindo o objetivo a cada lote (TASK DONE confirma só os passos).
+     Tela desconhecida ou fluxo que pode ramificar (diálogos, dropdowns
+     incertos)? Explore com as primitivas (`desktop_snapshot` →
+     `desktop_find` → `desktop_click`/`desktop_type`) verificando cada
+     passo, e monte o `desktop_act` quando os passos estiverem certos.
+     Depois de `desktop_launch`, continue com `desktop_act` (o resto
+     determinístico NUMA chamada), não com primitivas soltas. Para preencher
+     vários campos/células conhecidos, digite e navegue com Tab/Enter em vez
+     de clicar um por um. Só resuma no final, nunca despeje manual.
+     NÃO faça sequência longa e incerta num `desktop_act` gigante.
+    Use as primitivas SÓ para explorar tela desconhecida ou quando o
+    `desktop_act` falhar 2 vezes seguidas.
    NUNCA desista no primeiro erro: se um passo falhar, ajuste (novo nome,
-   role diferente) e chame `desktop_act` de novo. Errar um comando não
+   role diferente) e chame `desktop_act` de novo com os passos restantes
+   NUMA chamada, incluindo o `close` no fim. Para Calculadora nunca use
+   `type` nem clique em dígito, só `press` com a conta inteira; nunca peça
+   para o usuário digitar à mão nem passe `ref` vazio para clique — se o
+   `desktop_act` parar no meio, monte de novo com `launch` + `press` da
+   conta + `close` e chame uma vez. Errar um comando não
    encerra a tarefa. Telas opacas (canvas, jogos, frames sem
    acessibilidade) não são clicáveis — use `desktop_describe` para
    responder o que aparece nelas.

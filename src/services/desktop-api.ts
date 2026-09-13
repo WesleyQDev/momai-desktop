@@ -44,6 +44,12 @@ export interface ReplayFrame {
   dataUrl: string
 }
 
+export interface FramesResult {
+  frames: ReplayFrame[]
+  truncated: boolean
+  total: number
+}
+
 function unwrapInstruction<T>(payload: unknown): T | null {
   if (!payload || typeof payload !== 'object') return null
   const record = payload as Record<string, unknown>
@@ -98,12 +104,16 @@ export async function stopRun(runId: string): Promise<boolean> {
   return !!parsed
 }
 
-export async function getFrames(runId: string): Promise<ReplayFrame[]> {
+export async function getFrames(runId: string): Promise<FramesResult> {
   const sdk = getSDK()
   const res = await sdk.api.post(`/extensions/${EXT_ID}/frames`, { runId })
-  if (!res || res.ok !== true) return []
-  const payload = res.data as { frames?: ReplayFrame[] }
-  return payload && Array.isArray(payload.frames) ? payload.frames : []
+  if (!res || res.ok !== true) return { frames: [], truncated: false, total: 0 }
+  const payload = res.data as { frames?: ReplayFrame[]; framesTruncated?: boolean; framesTotal?: number }
+  return {
+    frames: payload && Array.isArray(payload.frames) ? payload.frames : [],
+    truncated: !!payload && payload.framesTruncated === true,
+    total: !!payload && typeof payload.framesTotal === 'number' ? payload.framesTotal : 0,
+  }
 }
 
 export async function readSettings(): Promise<DesktopSettings | null> {

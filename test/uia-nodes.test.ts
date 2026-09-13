@@ -19,6 +19,8 @@ const nodes = require('../uia/nodes.ts') as {
   getNodeByRef: (nodes: Array<{ ref: number }>, ref: unknown) => { ref: number } | null
   formatSnapshotForLlm: (snapshot: { nodes: Array<{ ref: number; control: string; name: string; rect: { x: number; y: number; w: number; h: number } }> }, maxLines?: number) => string
   isTreeOpaque: (nodes: unknown) => boolean
+  escapeSendKeysChar: (ch: unknown) => string
+  normalizeRefInput: (ref: unknown) => number
 }
 
 function rawNode(overrides: Record<string, unknown> = {}) {
@@ -159,5 +161,63 @@ describe('isTreeOpaque', () => {
   it('accepts trees with one named actionable element', () => {
     const { nodes: list } = nodes.assignRefs([rawNode({ name: 'Salvar' })])
     expect(nodes.isTreeOpaque(list)).toBe(false)
+  })
+})
+
+describe('escapeSendKeysChar', () => {  it('escapes every SendKeys modifier in one place', () => {
+    expect(nodes.escapeSendKeysChar('{')).toBe('{{}')
+    expect(nodes.escapeSendKeysChar('}')).toBe('{}}')
+    expect(nodes.escapeSendKeysChar('+')).toBe('{+}')
+    expect(nodes.escapeSendKeysChar('^')).toBe('{^}')
+    expect(nodes.escapeSendKeysChar('%')).toBe('{%}')
+    expect(nodes.escapeSendKeysChar('~')).toBe('{~}')
+    expect(nodes.escapeSendKeysChar('(')).toBe('{(}')
+    expect(nodes.escapeSendKeysChar(')')).toBe('{)}')
+    expect(nodes.escapeSendKeysChar('[')).toBe('{[}')
+    expect(nodes.escapeSendKeysChar(']')).toBe('{]}')
+  })
+
+  it('passes ordinary characters through', () => {
+    expect(nodes.escapeSendKeysChar('a')).toBe('a')
+    expect(nodes.escapeSendKeysChar('5')).toBe('5')
+    expect(nodes.escapeSendKeysChar(' ')).toBe(' ')
+  })
+})
+
+describe('normalizeRefInput', () => {
+  it('accepts the bracket format shown in snapshots', () => {
+    expect(nodes.normalizeRefInput('[42]')).toBe(42)
+    expect(nodes.normalizeRefInput(' [7] ')).toBe(7)
+  })
+
+  it('accepts plain numbers and numeric strings', () => {
+    expect(nodes.normalizeRefInput(42)).toBe(42)
+    expect(nodes.normalizeRefInput('42')).toBe(42)
+  })
+
+  it('accepts loose forms like "ref 42"', () => {
+    expect(nodes.normalizeRefInput('ref 42')).toBe(42)
+  })
+
+  it('rejects input without digits', () => {
+    expect(nodes.normalizeRefInput('abc')).toBeNaN()
+    expect(nodes.normalizeRefInput('')).toBeNaN()
+    expect(nodes.normalizeRefInput(null)).toBeNaN()
+    expect(nodes.normalizeRefInput(undefined)).toBeNaN()
+  })
+})
+
+describe('getNodeByRef', () => {
+  it('finds nodes passed with brackets', () => {
+    const { nodes: list } = nodes.assignRefs([rawNode({ name: 'Salvar' })])
+    const ref = list[0].ref
+    expect(nodes.getNodeByRef(list, `[${ref}]`)?.ref).toBe(ref)
+    expect(nodes.getNodeByRef(list, ref)?.ref).toBe(ref)
+  })
+
+  it('misses unknown refs', () => {
+    const { nodes: list } = nodes.assignRefs([rawNode({ name: 'Salvar' })])
+    expect(nodes.getNodeByRef(list, 9999)).toBeNull()
+    expect(nodes.getNodeByRef(list, 'abc')).toBeNull()
   })
 })

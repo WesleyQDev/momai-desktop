@@ -143,7 +143,18 @@ function clampInt(value, fallback, min, max) {
 }
 
 function defaultSettings() {
-  return { allowedApps: [], recordVisuals: true, maxSteps: 50, maxRunMinutes: 10, safeStop: true, backgroundOnly: false, askBeforeForeground: true }
+  return { allowedApps: [], recordVisuals: true, maxSteps: 50, maxRunMinutes: 10, safeStop: true, backgroundOnly: false, askBeforeForeground: false }
+}
+
+/* Boolean flags arrive stringified from some hosts ("True"): accept true,
+   "true" (any case, trimmed) and 1, like the worker's isTrueFlag. Used
+   with an explicit fallback so missing keys keep their defaults. */
+function asBool(value, fallback) {
+  if (value === undefined) return fallback
+  if (value === true) return true
+  if (typeof value === 'number') return value === 1
+  if (typeof value === 'string') return value.trim().toLowerCase() === 'true'
+  return false
 }
 
 async function loadSettings(momai) {
@@ -154,12 +165,12 @@ async function loadSettings(momai) {
     if (stored && typeof stored === 'object') {
       settingsCache = {
         allowedApps: Array.isArray(stored.allowedApps) ? stored.allowedApps : [],
-        recordVisuals: stored.recordVisuals !== undefined ? stored.recordVisuals === true : true,
+        recordVisuals: asBool(stored.recordVisuals, true),
         maxSteps: clampInt(stored.maxSteps, 50, 1, 100),
         maxRunMinutes: clampInt(stored.maxRunMinutes, 10, 0, 120),
-        safeStop: stored.safeStop !== undefined ? stored.safeStop === true : true,
-        backgroundOnly: stored.backgroundOnly !== undefined ? stored.backgroundOnly === true : false,
-        askBeforeForeground: stored.askBeforeForeground !== undefined ? stored.askBeforeForeground === true : true,
+        safeStop: asBool(stored.safeStop, true),
+        backgroundOnly: asBool(stored.backgroundOnly, false),
+        askBeforeForeground: asBool(stored.askBeforeForeground, false),
       }
     }
   } catch {
@@ -172,12 +183,12 @@ async function saveSettings(momai, patch) {
   const current = await loadSettings(momai)
   settingsCache = {
     allowedApps: Array.isArray(patch.allowedApps) ? patch.allowedApps : current.allowedApps,
-    recordVisuals: patch.recordVisuals !== undefined ? patch.recordVisuals === true : current.recordVisuals,
+    recordVisuals: patch.recordVisuals !== undefined ? asBool(patch.recordVisuals, current.recordVisuals) : current.recordVisuals,
     maxSteps: patch.maxSteps !== undefined ? clampInt(patch.maxSteps, current.maxSteps, 1, 100) : current.maxSteps,
     maxRunMinutes: patch.maxRunMinutes !== undefined ? clampInt(patch.maxRunMinutes, current.maxRunMinutes, 0, 120) : current.maxRunMinutes,
-    safeStop: patch.safeStop !== undefined ? patch.safeStop === true : current.safeStop,
-    backgroundOnly: patch.backgroundOnly !== undefined ? patch.backgroundOnly === true : current.backgroundOnly === true,
-    askBeforeForeground: patch.askBeforeForeground !== undefined ? patch.askBeforeForeground === true : current.askBeforeForeground !== false,
+    safeStop: patch.safeStop !== undefined ? asBool(patch.safeStop, current.safeStop) : current.safeStop,
+    backgroundOnly: patch.backgroundOnly !== undefined ? asBool(patch.backgroundOnly, current.backgroundOnly) : current.backgroundOnly,
+    askBeforeForeground: patch.askBeforeForeground !== undefined ? asBool(patch.askBeforeForeground, current.askBeforeForeground) : current.askBeforeForeground,
   }
   try {
     await momai.storage.set('desktop-settings', settingsCache)

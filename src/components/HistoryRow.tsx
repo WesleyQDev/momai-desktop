@@ -13,15 +13,19 @@ export default function HistoryRow({ run }: { run: DesktopRunSummary }) {
   const { t } = useI18n()
   const [expanded, setExpanded] = useState(false)
   const [frames, setFrames] = useState<ReplayFrame[]>([])
+  const [truncated, setTruncated] = useState(false)
   const { run: detail, stopping, stop } = useDesktopRun(expanded ? run.id : null)
 
   useEffect(() => {
     let cancelled = false
     setFrames([])
+    setTruncated(false)
     if (!expanded) return
     getFrames(run.id)
-      .then((list) => {
-        if (!cancelled) setFrames(Array.isArray(list) ? list : [])
+      .then((result) => {
+        if (cancelled) return
+        setFrames(Array.isArray(result.frames) ? result.frames : [])
+        setTruncated(result.truncated === true)
       })
       .catch(() => {})
     return () => {
@@ -51,7 +55,7 @@ export default function HistoryRow({ run }: { run: DesktopRunSummary }) {
       </button>
       {expanded ? (
         <div className="px-3 pb-3 flex flex-col gap-3 border-t border-border/30 pt-3">
-          <RunReplay frames={frames} />
+          <RunReplay frames={frames} truncated={truncated} />
           <RunTimeline steps={steps} />
           {status === 'active' ? (
             <button

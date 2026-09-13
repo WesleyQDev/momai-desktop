@@ -38,10 +38,12 @@ const STRINGS: Record<string, Record<string, string>> = {
     'controls.saved': 'Salvo',
     'card.openPage': 'Ver passo a passo',
     'card.openReplay': 'Ver replay',
+    'card.opaqueHint': 'A última tela não expôs botões nem campos (canvas ou app sem acessibilidade).',
     'replay.title': 'Replay',
     'replay.empty': 'Sem screenshots neste run. Ligue "Gravar replay visual" nos controles.',
     'replay.play': 'Reproduzir',
     'replay.pause': 'Pausar',
+    'replay.truncated': 'replay parcial: nem todos os passos couberam nas imagens',
   },
   'en-US': {
     'run.live': 'Live session',
@@ -76,10 +78,12 @@ const STRINGS: Record<string, Record<string, string>> = {
     'controls.saved': 'Saved',
     'card.openPage': 'View step by step',
     'card.openReplay': 'View replay',
+    'card.opaqueHint': 'The last screen exposed no buttons or fields (canvas or app without accessibility).',
     'replay.title': 'Replay',
     'replay.empty': 'No screenshots in this run. Turn on "Record visual replay" in controls.',
     'replay.play': 'Play',
     'replay.pause': 'Pause',
+    'replay.truncated': 'partial replay: not every step fit in the images',
   },
 }
 

@@ -46,6 +46,12 @@ public static class Win32Input {
   public static extern IntPtr GetForegroundWindow();
   [DllImport("user32.dll")]
   public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
+  [DllImport("user32.dll")]
+  public static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, UIntPtr dwExtraInfo);
+  [DllImport("user32.dll")]
+  public static extern IntPtr GetAncestor(IntPtr hWnd, uint gaFlags);
+  [DllImport("user32.dll")]
+  public static extern bool BringWindowToTop(IntPtr hWnd);
 }
 '@
 
@@ -288,10 +294,22 @@ function Get-CompactTree($root, $maxDepth, $maxNodes) {
   }
 }
 
+function Activate-TargetWindow($hwnd) {
+  if ($hwnd -eq [IntPtr]::Zero) { return }
+  try {
+    if ([Win32Input]::IsIconic($hwnd)) {
+      [Win32Input]::ShowWindow($hwnd, 9) | Out-Null
+      Start-Sleep -Milliseconds 80
+    }
+    # Bypass Windows Foreground Lock by pulsing a zero keybd_event
+    [Win32Input]::keybd_event(0, 0, 0, [UIntPtr]::Zero)
+    [Win32Input]::BringWindowToTop($hwnd) | Out-Null
+    [Win32Input]::SetForegroundWindow($hwnd) | Out-Null
+    Start-Sleep -Milliseconds 120
+  } catch {}
+}
+
 function Assert-ForegroundApp($expectedApp) {
-  # Rect fallback clicks blind pixels: only proceed when the foreground app
-  # is still the one from the snapshot. Pattern actions above do not need
-  # this (they resolve the real element), but blind coordinates do.
   $expected = [string]$expectedApp
   if (-not $expected -or $expected -eq '') { return }
   $fgProc = ''
@@ -305,15 +323,15 @@ function Assert-ForegroundApp($expectedApp) {
   if ($fgProc -eq '') {
     throw 'Could not verify the foreground window: refusing a blind click.'
   }
+  # Background services like GameInputSvc or UWP ApplicationFrameHost match
+  if ($fgProc.ToLower() -eq 'gameinputsvc') { return }
+  if ($expected.ToLower() -eq 'applicationframehost' -or $fgProc.ToLower() -eq 'applicationframehost') { return }
   if ($fgProc.ToLower() -ne $expected.ToLower()) {
     throw "A janela ativa mudou para '$fgProc' (esperava '$expected'). Tire outro desktop_snapshot."
   }
 }
 
 function Focus-Window($el) {
-  # Brings the element's top-level window to the foreground so mouse and
-  # keystrokes land on the right window. Best effort: patterns below also
-  # work without focus. Returns the target window handle (or Zero).
   $cur = $el
   $window = $null
   for ($i = 0; $i -lt 20 -and $null -ne $cur; $i++) {
@@ -327,27 +345,32 @@ function Focus-Window($el) {
     $hwnd = [IntPtr]$window.GetCurrentPropertyValue(
       [System.Windows.Automation.AutomationElement]::NativeWindowHandleProperty)
     if ($hwnd -eq [IntPtr]::Zero) { return [IntPtr]::Zero }
-    if ([Win32Input]::IsIconic($hwnd)) {
-      [Win32Input]::ShowWindow($hwnd, 9) | Out-Null
-      Start-Sleep -Milliseconds 200
-    }
-    [Win32Input]::SetForegroundWindow($hwnd) | Out-Null
-    Start-Sleep -Milliseconds 250
+    Activate-TargetWindow $hwnd
     return $hwnd
   } catch { return [IntPtr]::Zero }
 }
 
 function Assert-TargetForeground($targetHwnd) {
-  # Blind input (mouse, keystrokes) is global: refuse it when the target
-  # window did not actually take the foreground (user clicked elsewhere,
-  # foreground lock denied the switch). Acting on the wrong window is
-  # worse than failing loudly.
   if ($targetHwnd -eq [IntPtr]::Zero) { return }
   $fg = [IntPtr]::Zero
   try { $fg = [Win32Input]::GetForegroundWindow() } catch {}
-  if ($fg -ne $targetHwnd) {
-    throw 'background_occluded: the target window is not in the foreground (another window may cover it or the user clicked elsewhere). Bring it forward and retry — never click or type blind.'
-  }
+  if ($fg -eq $targetHwnd) { return }
+  # Check if target is ancestor of foreground window (e.g. UWP child windows, CoreWindow)
+  try {
+    $root = [Win32Input]::GetAncestor($fg, 2) # GA_ROOT
+    if ($root -eq $targetHwnd) { return }
+    $owner = [Win32Input]::GetAncestor($fg, 3) # GA_ROOTOWNER
+    if ($owner -eq $targetHwnd) { return }
+  } catch {}
+  # Try active bring-forward once
+  Activate-TargetWindow $targetHwnd
+  try { $fg = [Win32Input]::GetForegroundWindow() } catch {}
+  if ($fg -eq $targetHwnd) { return }
+  try {
+    $root = [Win32Input]::GetAncestor($fg, 2)
+    if ($root -eq $targetHwnd) { return }
+  } catch {}
+  throw 'background_occluded: the target window is not in the foreground (another window may cover it or the user clicked elsewhere). Bring it forward and retry — never click or type blind.'
 }
 
 function Save-InputContext() {
@@ -378,7 +401,7 @@ function Restore-InputContext($ctx) {
   return $ok
 }
 
-function Invoke-Click($el) {
+function Invoke-Click($el, $noForeground) {
   try {
     $pat = $null
     if ($el.TryGetCurrentPattern(
@@ -406,6 +429,7 @@ function Invoke-Click($el) {
   # Mouse fallback needs the real cursor on the right window: only now
   # disturb focus, never for the pattern paths above. The previous cursor
   # and foreground window are restored right after the click.
+  if ($noForeground) { throw $noForegroundError }
   $savedCtx = Save-InputContext
   $targetHwnd = Focus-Window $el
   try { $el.SetFocus() } catch {}
@@ -443,7 +467,7 @@ function Get-WindowHwnd($el) {
   return [IntPtr]::Zero
 }
 
-function Invoke-Type($el, $text, $submit) {
+function Invoke-Type($el, $text, $submit, $noForeground) {
   try {
     $pat = $null
     if ($el.TryGetCurrentPattern(
@@ -452,6 +476,7 @@ function Invoke-Type($el, $text, $submit) {
         $pat.SetValue([string]$text)
       } catch {
         # Some providers need focus before accepting a value.
+        if ($noForeground) { throw $noForegroundError }
         $savedCtx = Save-InputContext
         $targetHwnd = Focus-Window $el
         try { $el.SetFocus() } catch {}
@@ -471,6 +496,7 @@ function Invoke-Type($el, $text, $submit) {
         $submitFg = [IntPtr]::Zero
         try { $submitFg = [Win32Input]::GetForegroundWindow() } catch {}
         if ($submitHwnd -ne [IntPtr]::Zero -and $submitFg -ne $submitHwnd) {
+          if ($noForeground) { throw $noForegroundError }
           $savedCtx = Save-InputContext
           Focus-Window $el | Out-Null
           try { $el.SetFocus() } catch {}
@@ -481,12 +507,15 @@ function Invoke-Type($el, $text, $submit) {
           $submitRestored = Restore-InputContext $savedCtx
           return @{ method = 'value-submit'; delivery = 'foreground'; restored = [bool]$submitRestored }
         }
+        # Even with the right window forward, Enter is a global keystroke.
+        if ($noForeground) { throw $noForegroundError }
         [System.Windows.Forms.SendKeys]::SendWait('{ENTER}')
       }
       return @{ method = 'value'; delivery = 'background' }
     }
   } catch {}
   # Keystroke fallback needs focus on the right window.
+  if ($noForeground) { throw $noForegroundError }
   $savedCtx = Save-InputContext
   $targetHwnd = Focus-Window $el
   try { $el.SetFocus() } catch {}
@@ -527,6 +556,14 @@ try {
   try { if ([int]$payload.maxNodes -gt 0) { $maxNodes = [int]$payload.maxNodes } } catch {}
   $returnTree = [bool]$payload.returnTree
   $findMode = ([string]$payload.findName -ne '' -or [string]$payload.findRole -ne '')
+
+  # Guardrail contract: when the caller forbids the foreground
+  # (backgroundOnly payload flag), background UIA patterns still run, but
+  # every mouse/keystroke/focus fallback throws background_unavailable
+  # instead of taking input. The runtime maps that error to a consent
+  # request; the message avoids focus-smell words so no refocus is tried.
+  $noForeground = [bool]$payload.backgroundOnly
+  $noForegroundError = 'background_unavailable: this action needs mouse or keystrokes, which the guardrails forbid.'
 
   $postTree = $null
   $root = [System.Windows.Automation.AutomationElement]::RootElement
@@ -656,6 +693,7 @@ try {
     [System.Windows.Forms.SendKeys]::SendWait('{ENTER}')
     $info = @{ method = 'gotourl'; delivery = 'foreground' }
   } elseif ($action -eq 'focuswindow') {
+    if ($noForeground) { throw $noForegroundError }
     # Brings a bound window back after focus was stolen mid-task (user
     # clicked elsewhere): restore when minimized, take the foreground,
     # and prove it before reporting ok. One shot, no retries here.
@@ -668,15 +706,11 @@ try {
       $probe = [System.Windows.Automation.AutomationElement]::FromHandle($fh)
     } catch {}
     if ($null -eq $probe) { throw 'window_gone: the bound window no longer exists.' }
-    if ([Win32Input]::IsIconic($fh)) {
-      [Win32Input]::ShowWindow($fh, 9) | Out-Null
-      Start-Sleep -Milliseconds 200
-    }
-    [Win32Input]::SetForegroundWindow($fh) | Out-Null
-    Start-Sleep -Milliseconds 300
+    Activate-TargetWindow $fh
     Assert-TargetForeground $fh
     $info = @{ method = 'focus'; delivery = 'foreground'; restored = $false }
   } elseif ($null -ne $rectFallback -and ($action -eq 'invoke' -or $action -eq 'click')) {
+    if ($noForeground) { throw $noForegroundError }
     Assert-ForegroundApp ([string]$payload.app)
     $savedCtx = Save-InputContext
     $cx = $rectFallback.x + [int]($rectFallback.w / 2)
@@ -691,6 +725,7 @@ try {
     $restored = Restore-InputContext $savedCtx
     $info = @{ method = 'mouse-rect'; delivery = 'foreground'; restored = [bool]$restored }
   } elseif ($null -ne $rectFallback) {
+    if ($noForeground) { throw $noForegroundError }
     Assert-ForegroundApp ([string]$payload.app)
     # Focus the field with a click, then type into the foreground window.
     $savedCtx = Save-InputContext
@@ -717,11 +752,12 @@ try {
     $info = @{ method = 'sendkeys-rect'; delivery = 'foreground'; restored = [bool]$restored }
   } else {
   switch ($action) {
-    'invoke'   { $info = Invoke-Click $el }
-    'click'    { $info = Invoke-Click $el }
-    'setvalue' { $info = Invoke-Type $el ([string]$payload.text) ([bool]$payload.submit) }
-    'sendkeys' { $info = Invoke-Type $el ([string]$payload.text) ([bool]$payload.submit) }
+    'invoke'   { $info = Invoke-Click $el $noForeground }
+    'click'    { $info = Invoke-Click $el $noForeground }
+    'setvalue' { $info = Invoke-Type $el ([string]$payload.text) ([bool]$payload.submit) $noForeground }
+    'sendkeys' { $info = Invoke-Type $el ([string]$payload.text) ([bool]$payload.submit) $noForeground }
     'press' {
+      if ($noForeground) { throw $noForegroundError }
       $savedCtx = Save-InputContext
       $targetHwnd = Focus-Window $el
       try { $el.SetFocus() } catch {}

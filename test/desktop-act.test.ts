@@ -117,10 +117,14 @@ describe('keyboardFallbackKey', () => {
 })
 
 describe('closeButtonCandidates', () => {
-  it('tries the window close button in English and Portuguese', () => {
+  it('tries the window close button across UI languages', () => {
     expect(closeButtonCandidates()).toEqual([
       { name: 'Close', role: 'Button' },
       { name: 'Fechar', role: 'Button' },
+      { name: 'Cerrar', role: 'Button' },
+      { name: 'Fermer', role: 'Button' },
+      { name: 'Schließen', role: 'Button' },
+      { name: 'Chiudi', role: 'Button' },
     ])
   })
 })

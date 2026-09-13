@@ -139,8 +139,8 @@ describe('foreground escalation guard', () => {
 })
 
 describe('background settings defaults', () => {
-  it('prefers background and asks before taking over', () => {
+  it('prefers background without asking first (user approved open default)', () => {
     expect(runs.defaultSettings().backgroundOnly).toBe(false)
-    expect(runs.defaultSettings().askBeforeForeground).toBe(true)
+    expect(runs.defaultSettings().askBeforeForeground).toBe(false)
   })
 })
