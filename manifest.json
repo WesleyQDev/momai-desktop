@@ -1,7 +1,7 @@
 {
   "id": "momai-desktop",
   "name": "MomAI Desktop",
-  "version": "2.0.4",
+  "version": "2.0.5",
   "description": "Abra programas e automatize tarefas: a MomAI enxerga os botões da tela e mostra cada passo.",
   "category": "utility",
   "tags": ["launcher", "programas", "pastas", "desktop", "automacao", "acessibilidade"],
