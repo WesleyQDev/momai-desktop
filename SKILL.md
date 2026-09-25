@@ -12,6 +12,11 @@ botões/campos com nome e posição. Screenshots existem só para replay,
 para mostrar ao usuário (`desktop_screenshot`) e para detalhar a tela
 (`desktop_describe`).
 
+A automação é SEMPRE passo a passo: leia a tela (`desktop_snapshot`), aja
+em UM elemento (`desktop_click`/`desktop_type`/`desktop_press`) e use a
+tela que a própria ação devolve antes do próximo passo. Não existe atalho
+que execute vários passos numa chamada só.
+
 ## Ferramentas de abertura
 
 | Ferramenta | Uso |
@@ -19,17 +24,16 @@ para mostrar ao usuário (`desktop_screenshot`) e para detalhar a tela
 | `search_local_items {query}` | Busca programas, arquivos e pastas pelo nome (uma vez só, decida pelo score; inclui apps da Loja como Calculadora via shell:AppsFolder) |
 | `open_local_item {path, name?}` | Abre pelo caminho absoluto da busca ou shell:AppsFolder, sem mover mouse nem teclado |
 | `desktop_launch {query, allowForeground?}` | Abre PROGRAMAS pelo índice direto em segundo plano (Edge, Firefox, Calculadora, Configurações). Jeito preferido de abrir programa: sem snapshot, sem foco, sem simular o Iniciar. O fallback por keystrokes exige allowForeground:true com a confirmação do usuário |
-| `desktop_act {objective?, steps, record?, allowForeground?}` | Executa a TAREFA INTEIRA numa chamada (jeito preferido p/ sequências curtas e certas, lotes de 10 passos ou menos): steps `[{op:"launch",query}, {op:"click",name,role?}, {op:"type",name,text,submit?}, {op:"press",name?,key}, {op:"scroll",name?,direction?,amount?}, {op:"select",name,option,role?}, {op:"close"}, {op:"goto",url}, {op:"wait",ms?}]`. `close` fecha a janela (botão Fechar/Close, senão Alt+F4). `goto` vai para um endereço no navegador aberto (Ctrl+L, digita, Enter). `scroll` rola com PageUp/PageDown/Home/End (até 10 páginas). `select` abre o dropdown e clica na opção. Para Calculadora prefira `press` com a tecla (`record:false` pula o replay e vai mais rápido; clique em dígito cai sozinho para teclado). Resolve nomes na tela fresca com retries (nome+papel, depois só nome); respeita os limites do page. Passos de primeiro plano (`press`, `goto`, fallbacks de mouse/teclado) são recusados enquanto os guardrails proibirem: peça ao usuário e repita a chamada com allowForeground:true |
 
 ## Ferramentas de automação (computer use)
 
 | Ferramenta | Uso |
 | --- | --- |
-| `desktop_snapshot {scope?, objective?, apps?}` | Lê a janela da tarefa (amarrada por launch/act — cliques do usuário em outra janela não desviam a leitura) e lista os elementos como refs numeradas. Sem tarefa amarrada, lê a janela ativa. Com `apps: ["Nome"]` força esse programa mesmo atrás da janela ativa (abre sozinho em 2º plano se fechado). Chame sempre antes de clicar/digitar |
+| `desktop_snapshot {scope?, objective?, apps?}` | Lê a janela da tarefa (amarrada por launch — cliques do usuário em outra janela não desviam a leitura) e lista os elementos como refs numeradas. Sem tarefa amarrada, lê a janela ativa. Com `apps: ["Nome"]` força esse programa mesmo atrás da janela ativa (abre sozinho em 2º plano se fechado). Chame no início/retomada da tarefa e quando o último resultado não trouxer a tela — cada ação já devolve a tela nova com as refs |
 | `desktop_find {query, role?, snapshotId?}` | Procura um elemento pelo nome visível no último snapshot |
-| `desktop_click {ref, snapshotId?}` | Clica no elemento da ref (tenta o padrão nativo primeiro) |
-| `desktop_type {ref, text, submit?, snapshotId?}` | Digita num campo da ref (`submit:true` dá Enter) |
-| `desktop_press {ref, key, snapshotId?}` | Pressiona tecla com a ref focada (sintaxe SendKeys: `{ENTER}`, `{TAB}`, `^c`) |
+| `desktop_click {ref, snapshotId?}` | Clica no elemento da ref (tenta o padrão nativo primeiro). O resultado já traz a tela nova com as refs renumeradas; em caso de falha, traz a tela atual junto do erro |
+| `desktop_type {ref, text, submit?, snapshotId?}` | Digita num campo da ref (`submit:true` dá Enter). O resultado já traz a tela nova (endereço web enviado espera a página carregar antes de ler) |
+| `desktop_press {ref, key, snapshotId?}` | Pressiona tecla com a ref focada (sintaxe SendKeys: `{ENTER}`, `{TAB}`, `^c`). O resultado já traz a tela nova |
 | `desktop_describe {question?, screen?}` | Olha a tela e detalha o que aparece (ou responde à pergunta). Para se orientar em área complicada/opaca. Precisa de modelo com visão |
 | `desktop_screenshot {screen?}` | Mostra a tela ao USUÁRIO como imagens no chat (todas as telas, ou uma via `screen`). Para o modelo se orientar, use `desktop_describe` |
 | `desktop_get_run {runId?}` | Mostra a execução com a timeline de passos (também alimenta o card do chat) |
@@ -42,8 +46,8 @@ para mostrar ao usuário (`desktop_screenshot`) e para detalhar a tela
 
 - "abra o chrome" → `desktop_launch {query: "chrome"}`
 - "abra a calculadora" → `desktop_launch {query: "calculadora"}`
-- "abra a calculadora e faça 10*5 e feche" → `desktop_act` com `record:false` e `[{op:"launch",query:"calculadora"},{op:"press",key:"10*5{ENTER}"},{op:"close"}]` — um `press` com a conta inteira vale por vários dígitos (também aceito em passos separados, que juntamos sozinhos); nunca clique em dígito, sempre `press`; dígitos aceitam nomes por extenso e IDs internos, e `+` vai escapado sozinho
-- "abra o navegador e vá para <endereço>" → `desktop_act` com `[{op:"launch",query:"<navegador>"},{op:"goto",url:"<endereço>"}]`
+- "abra a calculadora e faça 10*5 e feche" → `desktop_launch` → `desktop_press` com a conta inteira (`10*5{ENTER}`; o resultado já traz a tela nova) → clique no botão Fechar/Close (ou `desktop_press` com `%{F4}`). Nunca clique em dígito, sempre `press` com a conta; dígitos aceitam nomes por extenso e IDs internos, e `+` vai escapado sozinho
+- "abra o navegador e vá para <endereço>" → `desktop_launch` (o resultado já traz a tela) → digite o endereço na barra de endereços com `desktop_type {ref, text, submit:true}` (ou foque a barra com `desktop_press {ref, key:"^l"}` antes)
 - "abra minha pasta de Downloads" → `search_local_items` + `open_local_item`
 - "clique em Salvar no Bloco de Notas" → `desktop_snapshot` → `desktop_find {query: "Salvar"}` → `desktop_click {ref}`
 - "digite meu e-mail no campo" → `desktop_snapshot` → `desktop_click`/`desktop_type {ref, text}`
@@ -56,80 +60,65 @@ Toda tarefa composta segue o mesmo encadeamento. Nunca pare no meio para
 perguntar e nunca repita `search_local_items` com paráfrases: uma busca
 basta, decida pelo score.
 
-  1. Para QUALQUER tarefa com 2+ passos (abrir → clicar → digitar), prefira
-     `desktop_act` em LOTES CURTOS (10 passos ou menos) e determinísticos —
-     ele resolve cada nome na tela fresca, espera o app abrir e tenta de
-     novo sozinho. A tarefa fica amarrada à janela aberta: mesmo que o
-     usuário clique em outro lugar, ela continua na mesma janela sem
-     reabrir — só reabra se a resposta disser que a janela sumiu.
-     Tarefa longa? Divida em vários `desktop_act` com snapshot entre eles,
-     conferindo o objetivo a cada lote (TASK DONE confirma só os passos).
-     Tela desconhecida ou fluxo que pode ramificar (diálogos, dropdowns
-     incertos)? Explore com as primitivas (`desktop_snapshot` →
-     `desktop_find` → `desktop_click`/`desktop_type`) verificando cada
-     passo, e monte o `desktop_act` quando os passos estiverem certos.
-     Depois de `desktop_launch`, continue com `desktop_act` (o resto
-     determinístico NUMA chamada), não com primitivas soltas. Para preencher
-     vários campos/células conhecidos, digite e navegue com Tab/Enter em vez
-     de clicar um por um. Só resuma no final, nunca despeje manual.
-     NÃO faça sequência longa e incerta num `desktop_act` gigante.
-    Use as primitivas SÓ para explorar tela desconhecida ou quando o
-    `desktop_act` falhar 2 vezes seguidas.
-   NUNCA desista no primeiro erro: se um passo falhar, ajuste (novo nome,
-   role diferente) e chame `desktop_act` de novo com os passos restantes
-   NUMA chamada, incluindo o `close` no fim. Para Calculadora nunca use
-   `type` nem clique em dígito, só `press` com a conta inteira; nunca peça
-   para o usuário digitar à mão nem passe `ref` vazio para clique — se o
-   `desktop_act` parar no meio, monte de novo com `launch` + `press` da
-   conta + `close` e chame uma vez. Errar um comando não
-   encerra a tarefa. Telas opacas (canvas, jogos, frames sem
-   acessibilidade) não são clicáveis — use `desktop_describe` para
-   responder o que aparece nelas.
-   Se o snapshot avisar TELA OPACA, NÃO tire outro snapshot: a árvore não
-   vai mudar. Só declare impossível com sinceridade se `desktop_describe`
-   também responder indisponível.
-2. Para abrir PROGRAMAS avulsos use `desktop_launch` (busca do Windows: resolve Edge,
-   Firefox, Calculadora e apps da Loja sem precisar de caminho). Para
-   ARQUIVOS E PASTAS, ache UMA vez (`search_local_items`) e abra o melhor
-   resultado (`open_local_item`, preferindo Programa/Atalho com maior
-   score).
-   Se dois candidatos forem igualmente prováveis e a tarefa for SOMENTE
-   abrir, aí sim pergunte; se a tarefa continua (clicar, digitar,
-   automatizar), abra o melhor e siga — o snapshot da janela confirma se
-   acertou.
-   NUNCA troque o programa pedido por outro: abra o nome exato pedido
-   (um navegador NÃO substitui um serviço web com app instalado). Na
-   dúvida se o app existe, confira com `search_local_items` antes — um
-   score alto no nome exato confirma.
-3. Leia a tela (`desktop_snapshot`) — o app recém-aberto pode demorar um
-   instante; o snapshot tenta de novo sozinho, mas se vier vazio repita a
-   chamada
-4. Aja em sequência, sem perguntar a cada passo: `desktop_find` →
-   `desktop_click` / `desktop_type` → novo `desktop_snapshot` (a tela
-   mudou, as refs antigas morreram) → continue até o objetivo.
-   Depois de cada clique OBRIGATORIAMENTE tire outro snapshot antes do
-   próximo passo — nunca digite ou clique com refs da tela anterior e
-   nunca encerre a resposta no meio da tarefa.
-   A CADA rodada escreva 1 linha curta de progresso JUNTO com a chamada
-   (ex.: "Passo 2: clicando em Salvar") — rodadas mudas em sequência são
-   lidas como loop e o host corta suas tools; e nunca repita a mesma
-   chamada idêntica: ajuste algo ou conclua.
-5. Encerre TODA tarefa com desktop_stop_run: e ele que mostra o card final com o replay no chat. Sem isso, a tarefa termina sem card
-6. So pare para perguntar quando houver ambiguidade real (dois botoes
-   iguais, ação destrutiva)
+  1. Abra o programa (`desktop_launch`) ou o arquivo/pasta
+     (`search_local_items` → `open_local_item`): o resultado já traz a tela
+     da janela aberta. Se ele não trouxer a tela (o app pode estar abrindo
+     devagar), chame `desktop_snapshot`.
+  2. A CADA passo: `desktop_find` (quando precisar do nome exato) →
+     `desktop_click`/`desktop_type`/`desktop_press`. O resultado da ação JÁ
+     traz a NOVA TELA com as refs renumeradas — use-a direto no próximo
+     passo, SEM chamar `desktop_snapshot` de novo. Só leia a tela por conta
+     própria no início/retomada da tarefa, quando o resultado não trouxer a
+     tela, ou quando ele avisar que a janela mudou. As refs antigas morrem
+     quando a tela muda: nunca digite ou clique com refs da tela anterior e
+     nunca encerre a resposta no meio da tarefa.
+  3. Para preencher vários campos/células conhecidos, digite e navegue com
+     Tab/Enter em vez de clicar um por um (`desktop_type` com
+     `submit:true` dá Enter).
+  4. NUNCA desista no primeiro erro: a falha já devolve a tela atual junto
+     do motivo — ajuste o nome/papel do elemento (ou use outra ref) e tente
+     de novo NA MESMA rodada. Errar um comando não encerra a tarefa. Nunca
+     peça para o usuário digitar à mão nem passe `ref` vazio para clique.
+  5. A CADA rodada escreva 1 linha curta de progresso JUNTO com a chamada
+     (ex.: "Passo 2: clicando em Salvar") — rodadas mudas em sequência são
+     lidas como loop e o host corta suas tools; e nunca repita a mesma
+     chamada idêntica: ajuste algo ou conclua.
+  6. Encerre TODA tarefa com `desktop_stop_run`: é ele que mostra o card
+     final com o replay no chat. Sem isso, a tarefa termina sem card.
+  7. Só pare para perguntar quando houver ambiguidade real (dois botões
+     iguais, ação destrutiva).
 
-Exemplo de encadeamento ("abra o <programa>, crie um novo <documento> e
-digite <texto>"): `desktop_act` com
-`[{op:"launch",query:"<programa>"},{op:"click",name:"<opção de novo>"},
-{op:"type",role:"Document",text:"<texto>"}]`.
+  Telas opacas (canvas, jogos, frames sem acessibilidade) não são
+  clicáveis — use `desktop_describe` para responder o que aparece nelas.
+  Se o snapshot avisar TELA OPACA, NÃO tire outro snapshot: a árvore não
+  vai mudar. Só declare impossível com sinceridade se `desktop_describe`
+  também responder indisponível.
+
+  Para abrir PROGRAMAS avulsos use `desktop_launch` (busca do Windows:
+  resolve Edge, Firefox, Calculadora e apps da Loja sem precisar de
+  caminho). Para ARQUIVOS E PASTAS, ache UMA vez (`search_local_items`) e
+  abra o melhor resultado (`open_local_item`, preferindo Programa/Atalho
+  com maior score). Se dois candidatos forem igualmente prováveis e a
+  tarefa for SOMENTE abrir, aí sim pergunte; se a tarefa continua (clicar,
+  digitar, automatizar), abra o melhor e siga — o snapshot da janela
+  confirma se acertou. NUNCA troque o programa pedido por outro: abra o
+  nome exato pedido (um navegador NÃO substitui um serviço web com app
+  instalado). Na dúvida se o app existe, confira com `search_local_items`
+  antes — um score alto no nome exato confirma.
+
+  Exemplo de encadeamento ("abra o <programa>, crie um novo <documento> e
+  digite <texto>"): `desktop_launch` (a tela vem no resultado) →
+  `desktop_find {query:"<opção de novo>"}` → `desktop_click` (a tela nova
+  vem no resultado) → `desktop_type {ref, text:"<texto>"}` →
+  `desktop_stop_run`.
 
 ## Regras
 
-- Elementos só valem dentro do `snapshotId`: refs expiram em ~90s ou quando a janela muda — tire outro `desktop_snapshot` e use as novas refs
-- `desktop_find` responde só texto (sem card) para não encher o chat; cada ação (`click/type/press`, fim de `desktop_act`, `stop_run`) mostra o card com o replay atualizado
+- Elementos só valem dentro do `snapshotId`: refs expiram em ~90s ou quando a janela muda — o resultado de cada ação já devolve a tela nova com as refs renumeradas; só tire outro `desktop_snapshot` quando o resultado não trouxer a tela
+- `desktop_find` responde só texto (sem card) para não encher o chat; cada ação (`click/type/press`, `stop_run`) mostra o card com o replay atualizado
 - Se o app não estiver na lista de permitidos, oriente a liberar no page do MomAI Desktop
-- Respeite os limites do page (passos e tempo máximos): ao atingi-los, encerre com honestidade em vez de insistir
-- Se a janela trocar sozinha no meio da tarefa (safe-stop ligado), a execução para por segurança — confirme o app certo e recomece
+- Passos que precisam do primeiro plano (`press`, fallbacks de mouse/teclado) são recusados enquanto os guardrails proibirem: peça ao usuário e repita a chamada com allowForeground:true
+- Se a janela trocar sozinha no meio da tarefa (safe-stop ligado), confirme o app certo e recomece
 - Automação precisa de Windows; em outro sistema, explique o limite em vez de chutar coordenadas
 - PROIBIDO explicar ao usuário como ele faria manualmente ("basta clicar em..."): execute VOCÊ com as tools até concluir a tarefa de ponta a ponta
 - Antes de cada clique/digitacao, confira no snapshot se App/Janela e o app da tarefa. Se o snapshot avisar que a janela ativa mudou, PARE e avise o usuario: nunca clique ou digite na janela errada

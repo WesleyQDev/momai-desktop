@@ -1350,8 +1350,9 @@ function normalizePressKey(key) {
   return single || raw
 }
 
-/* First web address inside a free-text request, so open-plus-navigate can
-   run in one desktop_act call instead of two separate tool rounds. */
+/* First web address inside a free-text request, so desktop_launch refuses to
+   treat it as a program name and points the model to the step-by-step
+   navigation instead. */
 function extractFirstWebUrl(text) {
   const raw = String(text || '')
   if (!raw) return null
@@ -1383,6 +1384,44 @@ function buildFindMissInstruction(query, truncated) {
     ? ' The list was truncated, so a fresh snapshot may reveal more elements.'
     : ''
   return `No element matching "${name}" in this snapshot.${truncatedHint} Take a new desktop_snapshot once and act on its refs; if it is still missing, report progress instead of searching again. ${DIR_SHORT_UPDATE}`
+}
+
+/* Window query for an opened file/folder: the base name without the file
+   extension, so "relatorio.txt" is matched by a window titled
+   "relatorio.txt - Bloco de Notas". */
+function openedItemQuery(value) {
+  const raw = String(value || '').trim()
+  if (!raw) return ''
+  const base = raw.split(/[\\/]/).filter(Boolean).pop() || ''
+  return base.replace(/\.[A-Za-z0-9]{1,6}$/, '').trim()
+}
+
+/* Instruction for open_local_item / auto-open: when the opened window was
+   already read, the fresh screen rides along so the next step needs no
+   extra snapshot round; otherwise keep the plain hint. */
+function buildOpenItemInstruction(input) {
+  const src = input && typeof input === 'object' ? input : {}
+  const message = String(src.message || '').trim()
+  const path = String(src.path || '').trim()
+  const screenText = String(src.screenText || '').trim()
+  if (screenText) {
+    return `${message}\nNOVA TELA (as refs antigas morreram, use SOMENTE estas):\n${screenText}\nPROXIMO PASSO OBRIGATORIO: continue a tarefa AGORA com desktop_find, desktop_click ou desktop_type usando as refs ACIMA, escrevendo 1 linha de progresso junto. Quando a tarefa estiver CONCLUIDA (nada mais a fazer), chame desktop_stop_run para encerrar e mostrar o card final. ${DIR_NO_FINAL_YET}`
+  }
+  return JSON.stringify({ ok: true, message, path, next: 'Chame desktop_snapshot para ver a janela e continuar a tarefa.' })
+}
+
+/* Instruction for a failed click/type/press: the current screen rides along
+   with the error so the model can fix the target and retry in the same
+   round instead of spending one read-only round first. */
+function buildActionFailureInstruction(input) {
+  const src = input && typeof input === 'object' ? input : {}
+  const actionLabel = String(src.actionLabel || 'action').trim() || 'action'
+  const detail = String(src.detail || 'unknown error').trim() || 'unknown error'
+  const screenText = String(src.screenText || '').trim()
+  if (screenText) {
+    return `${actionLabel} failed: ${detail}.\nNOVA TELA (as refs antigas morreram, use SOMENTE estas):\n${screenText}\nAnalise o motivo com calma e ajuste o alvo (nome/papel ou outra ref) antes de repetir a chamada; nunca repita a mesma chamada identica. ${DIR_NO_FINAL_YET}`
+  }
+  return `${actionLabel} failed: ${detail}. The window may have changed — take a new desktop_snapshot and retry.`
 }
 
 /* Reads the screen right after an action so the model can keep going
@@ -1457,6 +1496,35 @@ function ingestReturnedTree(run, res, scope, maxLines) {
   const tail = snapshot.truncated ? '\n(List truncated: use desktop_find to search.)' : ''
   const opaque = uiaNodes.isTreeOpaque(snapshot.nodes) ? opaqueScreenWarning() : ''
   return { snapshot, snapshotId: id, nodes: snapshot.nodes, text: `${header}\n${list}${tail}${opaque}` }
+}
+
+/* After opening a file/folder the window may still be coming up: poll the
+   foreground until it belongs to the opened item (bounded), bind the run to
+   it and hand the fresh screen back — the next step needs no extra read.
+   Returns null when the window never shows up, so the caller keeps the
+   plain snapshot hint instead of a stale screen. */
+async function openedItemScreen(run, query) {
+  const want = String(query || '').trim()
+  if (!want) return null
+  for (let attempt = 0; attempt < 5; attempt++) {
+    if (attempt > 0) await sleepMs(600)
+    let dump = null
+    try {
+      dump = await uiaProvider.dumpTree('active', 0)
+    } catch {
+      dump = null
+    }
+    if (!dump || dump.ok !== true || !Array.isArray(dump.nodes) || dump.nodes.length === 0) continue
+    const appName = String(dump.appName || '')
+    const windowTitle = String(dump.windowTitle || '')
+    /* Only bind and report when the foreground is really the opened item:
+       a stale screen would invite the next step to act on the wrong window. */
+    if (!doesLaunchMatchApp(want, appName, windowTitle)) continue
+    const hwnd = normalizeHwnd(dump.hwnd)
+    if (hwnd) run.targetHwnd = hwnd
+    return ingestReturnedTree(run, dump, 'active', 18)
+  }
+  return null
 }
 
 function bestTypeTarget(nodes) {
@@ -1771,13 +1839,13 @@ async function handleDesktopTool({ toolName, args, content, momai }) {
 
   /* ── desktop_launch: focus-free program opener via Windows Search ── */
   if (toolName === 'desktop_launch') {
-    const query = String(params.query || content || '').trim()
+    const query = String(params.query || '').trim()
     if (!query) {
       return { tool: toolName, instruction: 'Tell me the program name to launch (query).' }
     }
     const directUrl = extractFirstWebUrl(query)
     if (directUrl) {
-      return { tool: toolName, instruction: `That request already contains a web address (${directUrl}). Use desktop_act once with [{op:"launch",query:"<program>"},{op:"goto",url:"${directUrl}"}] instead of calling desktop_launch first.` }
+      return { tool: toolName, instruction: `That request already contains a web address (${directUrl}). Call desktop_launch again with just the program name (query), then take a desktop_snapshot and type the address in the address bar (desktop_type with submit:true, or focus it with desktop_press ^l first).` }
     }
     if (!uiaProvider.isSupported()) {
       return { tool: toolName, instruction: DESKTOP_NOT_SUPPORTED_MSG }
@@ -1904,7 +1972,7 @@ async function handleDesktopTool({ toolName, args, content, momai }) {
     if (!uiaProvider.isSupported()) {
       return { tool: toolName, instruction: DESKTOP_NOT_SUPPORTED_MSG }
     }
-    const question = String(params.question || content || '').trim()
+    const question = String(params.question || '').trim()
     const res = await uiaProvider.describeScreen(question, params.screen)
     if (res.ok) {
       return {
@@ -2778,7 +2846,7 @@ async function handleDesktopTool({ toolName, args, content, momai }) {
       scope,
     }
     const snapshotId = desktopRuns.putSnapshot(snapshot)
-    const objective = String(params.objective || content || '').slice(0, 200)
+    const objective = String(params.objective || '').slice(0, 200)
     let run = desktopRuns.latestActiveRun()
     const runFresh = run && Date.now() - Date.parse(run.updatedAt) < 10 * 60 * 1000
     if (!runFresh) run = desktopRuns.createRun(objective)
@@ -3050,10 +3118,13 @@ async function handleDesktopTool({ toolName, args, content, momai }) {
         }
       }
     }
-    /* Failures stay text-only; the card comes with the next success or stop. */
+    /* Failure rides with the current screen: the retry can fix the target
+       and act in the same round. The card comes with the next success or
+       stop. */
+    const fresh = await followupScreen(run, resolved.snapshot.scope, 18)
     return {
       tool: toolName,
-      instruction: `${actionLabel} failed: ${detail}. The window may have changed — take a new desktop_snapshot and retry.`,
+      instruction: buildActionFailureInstruction({ actionLabel, detail, screenText: fresh.text }),
     }
   }
 
@@ -3282,7 +3353,7 @@ module.exports = {
   tools: [
     {
       name: 'search_local_items',
-      description: 'Busca pastas, arquivos, programas e aplicativos no computador local por nome. Uma busca basta: nao repita com parafrases, decida pelo score. Depois de escolher o caminho, chame open_local_item e continue com desktop_snapshot. Nao pare para perguntar quando a tarefa tem proximos passos (clicar, digitar, automatizar). Retorna caminhos absolutos com score de confianca.',
+      description: 'Busca pastas, arquivos, programas e aplicativos no computador local por nome. Uma busca basta: nao repita com parafrases, decida pelo score. Depois de escolher o caminho, chame open_local_item: ele ja devolve a tela da janela aberta com as refs. Nao pare para perguntar quando a tarefa tem proximos passos (clicar, digitar, automatizar). Retorna caminhos absolutos com score de confianca.',
       parameters: {
         type: 'object',
         required: ['query'],
@@ -3293,7 +3364,7 @@ module.exports = {
     },
     {
       name: 'open_local_item',
-      description: 'Abre pasta, arquivo ou programa pelo caminho absoluto. Use APENAS com caminho absoluto retornado pelo search_local_items. Nunca trava: responde em segundos mesmo se o app ja estiver aberto. Depois de abrir, chame desktop_snapshot para ver a janela e continuar a tarefa.',
+      description: 'Abre pasta, arquivo ou programa pelo caminho absoluto. Use APENAS com caminho absoluto retornado pelo search_local_items. Nunca trava: responde em segundos mesmo se o app ja estiver aberto. Depois de abrir, a janela ja vem lida no proprio resultado (use as refs direto); so chame desktop_snapshot se o resultado nao trouxer a tela.',
       parameters: {
         type: 'object',
         required: ['path'],
@@ -3305,7 +3376,7 @@ module.exports = {
     },
     {
       name: 'desktop_launch',
-      description: 'Opens any PROGRAM via Windows Search (Start menu): presses the Windows key, types the name and confirms. Needs no snapshot and no focused window. Prefers a background direct launch; the keystroke fallback needs allowForeground:true after the user confirms, unless the guardrails allow it. For FILES and FOLDERS use search_local_items instead. If the request already contains a web address, prefer desktop_act once with launch plus goto instead of calling this tool first.',
+      description: 'Opens any PROGRAM via Windows Search (Start menu): presses the Windows key, types the name and confirms. Needs no snapshot and no focused window. Prefers a background direct launch; the keystroke fallback needs allowForeground:true after the user confirms, unless the guardrails allow it. For FILES and FOLDERS use search_local_items instead. When the request also contains a web address, call this tool with just the program name, then take a desktop_snapshot and navigate step by step: type the address into the address bar (desktop_type with submit:true) or focus it with desktop_press ^l first.',
       parameters: {
         type: 'object',
         required: ['query'],
@@ -3316,26 +3387,8 @@ module.exports = {
       },
     },
     {
-      name: 'desktop_act',
-      description: 'Runs a WHOLE desktop task in ONE call (preferred for open-then-click-then-type flows): pass steps like [{op:"launch",query:"Word"},{op:"click",name:"Documento em branco"},{op:"type",role:"Document",text:"Hello word"},{op:"close"}]. For Calculator prefer press keys over button clicks (digits/operators fall back to keyboard automatically; pass record:false to skip replay frames for speed). When the request contains a web address, combine launch plus goto in this same call instead of separate launch and navigate rounds. Ops: launch (program via Windows Search), click/type/press (by visible element "name" and optional "role", resolved on a fresh screen with retries; "name" may be empty when "role" alone identifies it), close (window Close button, else Alt+F4), goto (focus address bar via Ctrl+L, type URL, Enter), scroll (page keys on a target: direction up|down|top|bottom, amount, max 10), select (open dropdown "name", then click "option"), wait (ms). The task binds to the acted window: later steps read and act on that window even when focus moved elsewhere — do not relaunch while it exists. Page limits apply (max action steps, max minutes). Use the primitives (desktop_snapshot/click/type) only to explore an unknown screen first. Opaque screens (canvas, games) are not clickable: use desktop_describe to answer what is on them. Foreground steps (press/goto, mouse/keyboard fallbacks) are refused while the guardrails forbid them: ask the user, then repeat the call with allowForeground:true. Keep batches short (10 steps or fewer) and deterministic; split long tasks across calls with a snapshot in between. For unknown screens or branching flows, use the primitives with per-step verification instead.',
-      parameters: {
-        type: 'object',
-        required: ['steps'],
-        properties: {
-          objective: { type: 'string', description: 'Short goal shown on the MomAI Desktop page' },
-          allowForeground: { type: 'boolean', description: 'Explicit user consent for the whole call to take over mouse/keyboard when background patterns are unavailable' },
-          record: { type: 'boolean', description: 'Set false to skip replay screenshots for speed (no visual frames stored)' },
-          steps: {
-            type: 'array',
-            description: 'Steps in order. click/type/press need "name" (visible element name) and optional "role". type needs "text" (+optional submit:true). press needs "key" (SendKeys syntax). scroll needs "direction" (up|down|top|bottom, +optional amount, +optional name/role target). select needs "name" (dropdown) and "option" (+optional role). wait needs "ms".',
-            items: { type: 'object' },
-          },
-        },
-      },
-    },
-    {
       name: 'desktop_snapshot',
-      description: 'Reads a window through the Windows accessibility tree and lists clickable elements as numbered refs. Defaults to the task window (bound by launch/act), so user clicks elsewhere don\'t hijack the read; without a bound task reads the foreground window. Use scope:"desktop" for the whole desktop, or apps:["Name"] to force a program even behind the foreground. Always call this first before desktop_find/click/type/press, and again whenever the screen changes. Element analysis must use this tree, never pixel coordinates.',
+      description: 'Reads a window through the Windows accessibility tree and lists clickable elements as numbered refs. Defaults to the task window (bound by launch/act), so user clicks elsewhere don\'t hijack the read; without a bound task reads the foreground window. Use scope:"desktop" for the whole desktop, or apps:["Name"] to force a program even behind the foreground. Call it at the start of a task or when the last result did not carry a fresh screen: every action result already brings the new screen with the new refs. Element analysis must use this tree, never pixel coordinates.',
       parameters: {
         type: 'object',
         properties: {
@@ -3360,7 +3413,7 @@ module.exports = {
     },
     {
       name: 'desktop_click',
-      description: 'Clicks an element from a desktop_snapshot by ref, preferring a background accessibility pattern that never moves the real cursor. Foreground takeover needs explicit user consent. Refs expire when the screen changes: take a new desktop_snapshot and retry with the new ref.',
+      description: 'Clicks an element from a desktop_snapshot by ref, preferring a background accessibility pattern that never moves the real cursor. Foreground takeover needs explicit user consent. The result already carries the fresh screen with the new refs; on failure it also brings the current screen so you can fix the target and retry in the same round.',
       parameters: {
         type: 'object',
         required: ['ref'],
@@ -3373,7 +3426,7 @@ module.exports = {
     },
     {
       name: 'desktop_type',
-      description: 'Types text into an element from a desktop_snapshot by ref, preferring a background value pattern.',
+      description: 'Types text into an element from a desktop_snapshot by ref, preferring a background value pattern. The result already carries the fresh screen with the new refs (a submitted web address settles first, then the loaded page comes back).',
       parameters: {
         type: 'object',
         required: ['ref', 'text'],
@@ -3388,7 +3441,7 @@ module.exports = {
     },
     {
       name: 'desktop_press',
-      description: 'Presses a key while an element from a desktop_snapshot has focus. Keys use SendKeys syntax, e.g. {ENTER}, {TAB}, ^c. Foreground keys need explicit user consent.',
+      description: 'Presses a key while an element from a desktop_snapshot has focus. Keys use SendKeys syntax, e.g. {ENTER}, {TAB}, ^c. Foreground keys need explicit user consent. The result already carries the fresh screen with the new refs.',
       parameters: {
         type: 'object',
         required: ['ref', 'key'],
@@ -3448,7 +3501,7 @@ module.exports = {
         properties: {
           allowedApps: { type: 'array', description: 'Process names allowed for automation (empty allows all)', items: { type: 'string' } },
           recordVisuals: { type: 'boolean', description: 'Save one screenshot per step for the replay (default true)' },
-          maxSteps: { type: 'number', description: 'Max action steps per desktop_act run (default 50)' },
+          maxSteps: { type: 'number', description: 'Max action steps per batched desktop run (default 50)' },
           maxRunMinutes: { type: 'number', description: 'Max minutes per run before it stops itself, 0 disables (default 10)' },
           safeStop: { type: 'boolean', description: 'Stop the run when the foreground app changes unexpectedly (default true)' },
           backgroundOnly: { type: 'boolean', description: 'Never take over mouse or keyboard; only background patterns and direct launches (default false)' },
@@ -3503,9 +3556,21 @@ module.exports = {
       const result = await openItem(targetPath)
       if (result.ok) {
         /* Text only: the single run card appears at the end of the task. */
+        let run = desktopRuns.latestActiveRun()
+        const runFresh = run && Date.now() - Date.parse(run.updatedAt) < 10 * 60 * 1000
+        if (!runFresh) run = desktopRuns.createRun(`Abrir ${targetName}`)
+        const opened = await openedItemScreen(run, openedItemQuery(targetName || targetPath))
+        if (opened) {
+          desktopRuns.appendStep(run.id, { kind: 'action', label: `Aberto "${targetName}"` })
+          await desktopRuns.emitRunEvent(momai, 'desktop_run_step', { runId: run.id, kind: 'action', label: `Aberto "${targetName}"` })
+        }
         return {
           tool: 'open_local_item',
-          instruction: JSON.stringify({ ok: true, message: `"${targetName}" aberto com sucesso.`, path: targetPath, next: 'Chame desktop_snapshot para ver a janela e continuar a tarefa.' }),
+          instruction: buildOpenItemInstruction({
+            message: `"${targetName}" aberto com sucesso.`,
+            path: targetPath,
+            screenText: opened ? opened.text : '',
+          }),
         }
       }
       return {
@@ -3515,7 +3580,7 @@ module.exports = {
     }
 
     /* ── search_local_items ── */
-    const rawQuery = toolName === 'search_local_items' ? (String(args?.query || content || '')).trim() : text
+    const rawQuery = toolName === 'search_local_items' ? (String(args?.query || '')).trim() : text
     const searchTerms = extractSearchTerms(rawQuery)
     await debugLog(`search: raw="${rawQuery.slice(0, 80)}" terms="${searchTerms.slice(0, 80)}"`, momai)
 
@@ -3582,9 +3647,21 @@ module.exports = {
         const result = await openItem(perfectMatch.path)
         if (result.ok) {
           /* Text only: the single run card appears at the end of the task. */
+          let run = desktopRuns.latestActiveRun()
+          const runFresh = run && Date.now() - Date.parse(run.updatedAt) < 10 * 60 * 1000
+          if (!runFresh) run = desktopRuns.createRun(`Abrir ${perfectMatch.name}`)
+          const opened = await openedItemScreen(run, openedItemQuery(perfectMatch.name || perfectMatch.path))
+          if (opened) {
+            desktopRuns.appendStep(run.id, { kind: 'action', label: `Aberto "${perfectMatch.name}"` })
+            await desktopRuns.emitRunEvent(momai, 'desktop_run_step', { runId: run.id, kind: 'action', label: `Aberto "${perfectMatch.name}"` })
+          }
           return {
             tool: 'search_local_items',
-            instruction: JSON.stringify({ ok: true, message: `"${perfectMatch.name}" encontrado e aberto automaticamente.`, path: perfectMatch.path, next: 'Chame desktop_snapshot para ver a janela e continuar a tarefa.' }),
+            instruction: buildOpenItemInstruction({
+              message: `"${perfectMatch.name}" encontrado e aberto automaticamente.`,
+              path: perfectMatch.path,
+              screenText: opened ? opened.text : '',
+            }),
           }
         }
       }
@@ -3623,6 +3700,9 @@ module.exports.__internals = {
   escapeSendKeysText,
   extractFirstWebUrl,
   buildFindMissInstruction,
+  openedItemQuery,
+  buildOpenItemInstruction,
+  buildActionFailureInstruction,
   getScanCacheTtlMs,
   opaqueScreenWarning,
   classifyLaunchScreen,

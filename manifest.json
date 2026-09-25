@@ -1,7 +1,7 @@
 {
   "id": "momai-desktop",
   "name": "MomAI Desktop",
-  "version": "2.0.5",
+  "version": "2.0.6",
   "description": "Abra programas e automatize tarefas: a MomAI enxerga os botões da tela e mostra cada passo.",
   "category": "utility",
   "tags": ["launcher", "programas", "pastas", "desktop", "automacao", "acessibilidade"],
@@ -56,6 +56,7 @@
   "icon_bg": "assets/bg.jpg",
   "app_icon": "assets/app.png",
   "sidebar_icon": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\"><defs><linearGradient id=\"deskScreenGrad\" x1=\"0%\" y1=\"0%\" x2=\"100%\" y2=\"100%\"><stop offset=\"0%\" stop-color=\"#1E1B4B\"/><stop offset=\"60%\" stop-color=\"#312E81\"/><stop offset=\"100%\" stop-color=\"#0284C7\"/></linearGradient></defs><ellipse cx=\"10\" cy=\"21.2\" rx=\"5.5\" ry=\"1.2\" fill=\"#000000\" opacity=\"0.4\"/><path d=\"M10 15v3.8\" stroke=\"#475569\" stroke-width=\"2.2\" stroke-linecap=\"round\"/><ellipse cx=\"10\" cy=\"19.6\" rx=\"4.5\" ry=\"1.4\" fill=\"#334155\"/><ellipse cx=\"10\" cy=\"19.3\" rx=\"3.6\" ry=\"0.9\" fill=\"#64748B\" opacity=\"0.6\"/><rect x=\"1.5\" y=\"2.5\" width=\"17\" height=\"12.5\" rx=\"2.2\" fill=\"#1E293B\" stroke=\"#475569\" stroke-width=\"0.6\"/><path d=\"M1.5 13H18.5V13.6C18.5 14.5 17.6 15 16.5 15H3.5C2.4 15 1.5 14.5 1.5 13.6V13Z\" fill=\"#334155\"/><circle cx=\"10\" cy=\"14\" r=\"0.4\" fill=\"#94A3B8\"/><rect x=\"2.4\" y=\"3.4\" width=\"15.2\" height=\"9.2\" rx=\"1.1\" fill=\"url(#deskScreenGrad)\"/><rect x=\"3.8\" y=\"4.8\" width=\"7\" height=\"5\" rx=\"0.8\" fill=\"#FFFFFF\" fill-opacity=\"0.15\" stroke=\"#FFFFFF\" stroke-width=\"0.4\"/><line x1=\"5\" y1=\"6.4\" x2=\"8.5\" y2=\"6.4\" stroke=\"#38BDF8\" stroke-width=\"0.6\" stroke-linecap=\"round\"/><line x1=\"5\" y1=\"7.8\" x2=\"9.8\" y2=\"7.8\" stroke=\"#FFFFFF\" stroke-width=\"0.5\" stroke-linecap=\"round\" opacity=\"0.8\"/><path d=\"M8.5 6.8L10.5 9.8L9.5 10L10.1 11.2L9.4 11.5L8.9 10.4L8.1 11L8.5 6.8Z\" fill=\"#FFFFFF\"/><path d=\"M18 5C20 5.8 21 7.4 21 9.4\" stroke=\"#38BDF8\" stroke-width=\"1.4\" stroke-linecap=\"round\"/><path d=\"M19.5 3.5C22 4.7 23.5 6.8 23.5 9.4\" stroke=\"#818CF8\" stroke-width=\"1.4\" stroke-linecap=\"round\" opacity=\"0.85\"/><circle cx=\"21\" cy=\"14\" r=\"1.8\" fill=\"#38BDF8\"/><circle cx=\"21\" cy=\"14\" r=\"0.75\" fill=\"#FFFFFF\"/></svg>",
+  "sidebar_icon_essential": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><rect x=\"2\" y=\"3\" width=\"15\" height=\"11\" rx=\"1.5\"/><path d=\"M9.5 14v4M6.5 18h6\"/><path d=\"M4.5 6h4M4.5 8h2.5\"/><path d=\"M11 6.5l3 3-1.3.3.8 1.6-.7.3-.8-1.6-.9.9V6.5z\" fill=\"currentColor\" stroke=\"none\"/><path d=\"M17.5 4.5a3.5 3.5 0 0 1 2.5 3\"/><circle cx=\"20\" cy=\"12\" r=\"1.2\" fill=\"currentColor\"/></svg>",
   "momai_compat": ">=1.11.2",
   "sdkVersion": 1,
   "background": true,
@@ -97,22 +98,318 @@
     { "method": "POST", "path": "/settings", "tool": "desktop_settings" }
   ],
   "tools": [
-    { "name": "search_local_items" },
-    { "name": "open_local_item" },
-    { "name": "desktop_launch" },
-    { "name": "desktop_act" },
-    { "name": "desktop_snapshot" },
-    { "name": "desktop_find" },
-    { "name": "desktop_click" },
-    { "name": "desktop_type" },
-    { "name": "desktop_press" },
-    { "name": "desktop_get_run" },
-    { "name": "desktop_list_runs" },
-    { "name": "desktop_stop_run" },
-    { "name": "desktop_describe" },
-    { "name": "desktop_screenshot" },
-    { "name": "desktop_get_frames" },
-    { "name": "desktop_settings" }
+    {
+      "name": "search_local_items",
+      "description": "Busca pastas, arquivos, programas e aplicativos no computador local por nome. Uma busca basta: nao repita com parafrases, decida pelo score. Depois de escolher o caminho, chame open_local_item: ele ja devolve a tela da janela aberta com as refs. Nao pare para perguntar quando a tarefa tem proximos passos (clicar, digitar, automatizar). Retorna caminhos absolutos com score de confianca.",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "query"
+        ],
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "Nome ou termo do item a buscar (pasta, arquivo ou programa)"
+          }
+        }
+      }
+    },
+    {
+      "name": "open_local_item",
+      "description": "Abre pasta, arquivo ou programa pelo caminho absoluto. Use APENAS com caminho absoluto retornado pelo search_local_items. Nunca trava: responde em segundos mesmo se o app ja estiver aberto. Depois de abrir, a janela ja vem lida no proprio resultado (use as refs direto); so chame desktop_snapshot se o resultado nao trouxer a tela.",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "path"
+        ],
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "Caminho absoluto do item"
+          },
+          "name": {
+            "type": "string",
+            "description": "Nome do item para confirmacao"
+          }
+        }
+      }
+    },
+    {
+      "name": "desktop_launch",
+      "description": "Opens any PROGRAM via Windows Search (Start menu): presses the Windows key, types the name and confirms. Needs no snapshot and no focused window. Prefers a background direct launch; the keystroke fallback needs allowForeground:true after the user confirms, unless the guardrails allow it. For FILES and FOLDERS use search_local_items instead. When the request also contains a web address, call this tool with just the program name, then take a desktop_snapshot and navigate step by step: type the address into the address bar (desktop_type with submit:true) or focus it with desktop_press ^l first.",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "query"
+        ],
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "Program name to launch"
+          },
+          "allowForeground": {
+            "type": "boolean",
+            "description": "Explicit user consent to simulate the Start menu with keystrokes when the background launch misses"
+          }
+        }
+      }
+    },
+    {
+      "name": "desktop_snapshot",
+      "description": "Reads a window through the Windows accessibility tree and lists clickable elements as numbered refs. Defaults to the task window (bound by launch/act), so user clicks elsewhere don't hijack the read; without a bound task reads the foreground window. Use scope:\"desktop\" for the whole desktop, or apps:[\"Name\"] to force a program even behind the foreground. Call it at the start of a task or when the last result did not carry a fresh screen: every action result already brings the new screen with the new refs. Element analysis must use this tree, never pixel coordinates.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "scope": {
+            "type": "string",
+            "description": "active (foreground window, default) or desktop (whole desktop, heavier)"
+          },
+          "apps": {
+            "type": "array",
+            "description": "Read this program even behind the foreground window, e.g. [\"Calculadora\"]. Opens it in the background when closed, so the screen comes back in this same call.",
+            "items": {
+              "type": "string"
+            }
+          },
+          "objective": {
+            "type": "string",
+            "description": "Short goal of this run, shown on the MomAI Desktop page"
+          }
+        }
+      }
+    },
+    {
+      "name": "desktop_find",
+      "description": "Searches the last desktop_snapshot for an element by visible name. Returns matching refs. On a miss, take one fresh desktop_snapshot instead of searching again.",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "query"
+        ],
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "Visible element name to find (e.g. Salvar)"
+          },
+          "role": {
+            "type": "string",
+            "description": "Optional control role filter (e.g. Button, Edit, MenuItem)"
+          },
+          "snapshotId": {
+            "type": "string",
+            "description": "Snapshot id (defaults to the latest)"
+          }
+        }
+      }
+    },
+    {
+      "name": "desktop_click",
+      "description": "Clicks an element from a desktop_snapshot by ref, preferring a background accessibility pattern that never moves the real cursor. Foreground takeover needs explicit user consent. The result already carries the fresh screen with the new refs; on failure it also brings the current screen so you can fix the target and retry in the same round.",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "ref"
+        ],
+        "properties": {
+          "ref": {
+            "type": "number",
+            "description": "Element ref from desktop_snapshot"
+          },
+          "snapshotId": {
+            "type": "string",
+            "description": "Snapshot id (defaults to the latest)"
+          },
+          "allowForeground": {
+            "type": "boolean",
+            "description": "Explicit user consent to take over the foreground when background is unavailable"
+          }
+        }
+      }
+    },
+    {
+      "name": "desktop_type",
+      "description": "Types text into an element from a desktop_snapshot by ref, preferring a background value pattern. The result already carries the fresh screen with the new refs (a submitted web address settles first, then the loaded page comes back).",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "ref",
+          "text"
+        ],
+        "properties": {
+          "ref": {
+            "type": "number",
+            "description": "Element ref from desktop_snapshot"
+          },
+          "text": {
+            "type": "string",
+            "description": "Text to type"
+          },
+          "submit": {
+            "type": "boolean",
+            "description": "Press Enter after typing"
+          },
+          "snapshotId": {
+            "type": "string",
+            "description": "Snapshot id (defaults to the latest)"
+          },
+          "allowForeground": {
+            "type": "boolean",
+            "description": "Explicit user consent to take over the foreground when background is unavailable"
+          }
+        }
+      }
+    },
+    {
+      "name": "desktop_press",
+      "description": "Presses a key while an element from a desktop_snapshot has focus. Keys use SendKeys syntax, e.g. {ENTER}, {TAB}, ^c. Foreground keys need explicit user consent. The result already carries the fresh screen with the new refs.",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "ref",
+          "key"
+        ],
+        "properties": {
+          "ref": {
+            "type": "number",
+            "description": "Element ref from desktop_snapshot"
+          },
+          "key": {
+            "type": "string",
+            "description": "Key to press (SendKeys syntax)"
+          },
+          "snapshotId": {
+            "type": "string",
+            "description": "Snapshot id (defaults to the latest)"
+          },
+          "allowForeground": {
+            "type": "boolean",
+            "description": "Explicit user consent to take over the foreground"
+          }
+        }
+      }
+    },
+    {
+      "name": "desktop_get_run",
+      "description": "Shows one desktop automation run with its step timeline for the MomAI Desktop page card.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "runId": {
+            "type": "string",
+            "description": "Run id (defaults to the latest active run)"
+          }
+        }
+      }
+    },
+    {
+      "name": "desktop_list_runs",
+      "description": "Lists recent desktop automation runs.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "limit": {
+            "type": "number",
+            "description": "Max runs to list (default 10)"
+          }
+        }
+      }
+    },
+    {
+      "name": "desktop_stop_run",
+      "description": "Stops an active desktop automation run.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "runId": {
+            "type": "string",
+            "description": "Run id (defaults to the latest active run)"
+          }
+        }
+      }
+    },
+    {
+      "name": "desktop_get_frames",
+      "description": "Returns the replay screenshots of a desktop run for the MomAI Desktop page (titles + images). Page use; the model does not need to call this.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "runId": {
+            "type": "string",
+            "description": "Run id (defaults to the latest active run)"
+          }
+        }
+      }
+    },
+    {
+      "name": "desktop_settings",
+      "description": "Reads or updates MomAI Desktop guardrails (allowed apps, limits, replay, safe-stop, background mode). Call with no arguments to read.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "allowedApps": {
+            "type": "array",
+            "description": "Process names allowed for automation (empty allows all)",
+            "items": {
+              "type": "string"
+            }
+          },
+          "recordVisuals": {
+            "type": "boolean",
+            "description": "Save one screenshot per step for the replay (default true)"
+          },
+          "maxSteps": {
+            "type": "number",
+            "description": "Max action steps per batched desktop run (default 50)"
+          },
+          "maxRunMinutes": {
+            "type": "number",
+            "description": "Max minutes per run before it stops itself, 0 disables (default 10)"
+          },
+          "safeStop": {
+            "type": "boolean",
+            "description": "Stop the run when the foreground app changes unexpectedly (default true)"
+          },
+          "backgroundOnly": {
+            "type": "boolean",
+            "description": "Never take over mouse or keyboard; only background patterns and direct launches (default false)"
+          },
+          "askBeforeForeground": {
+            "type": "boolean",
+            "description": "Ask for explicit consent before any foreground takeover (default false)"
+          }
+        }
+      }
+    },
+    {
+      "name": "desktop_describe",
+      "description": "Looks at the current screen and describes it in detail, or answers a question about what is visible. Use when the user asks what is on screen, or to orient in a tricky opaque area (canvas, custom UI). Needs a vision-capable model; otherwise explains the limit.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "question": {
+            "type": "string",
+            "description": "What to detail about the screen (default: describe everything visible)"
+          },
+          "screen": {
+            "type": "number",
+            "description": "Display index for multi-monitor setups (default: primary)"
+          }
+        }
+      }
+    },
+    {
+      "name": "desktop_screenshot",
+      "description": "Shows the current screen to the USER as images in chat (one per display, or a single display via \"screen\"). Use when the user wants to SEE the screen, or asks what is on it and also wants the image. For the model to orient itself, use desktop_describe instead.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "screen": {
+            "type": "number",
+            "description": "Display index (default: all displays)"
+          }
+        }
+      }
+    }
   ],
   "voiceHooks": {
     "reply": {
