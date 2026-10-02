@@ -3339,8 +3339,10 @@ function buildForegroundConsentMessage(appName, actionLabel) {
 }
 
 async function debugLog(msg, momai) {
+  if (!process.env.DEBUG && !process.env.MOMAI_DEBUG) return
   try {
-    if (momai?.log) momai.log(msg)
+    if (momai?.debug) momai.debug(msg)
+    else if (momai?.log) momai.log(msg)
     else console.log(`[launcher] ${msg}`)
   } catch {}
 }
