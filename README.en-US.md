@@ -19,4 +19,4 @@ This extension allows MomAI to open programs, applications, and folders directly
 - "What have you done so far?"
 
 ### Security:
-This extension only acts on items you explicitly request and respects your Windows user permissions. If it finds more than one program with a similar name, it will ask which one you want to open. Run data stays on your computer.
+This extension only acts on items you explicitly request and respects your Windows user permissions. If it finds more than one program with a similar name, it will ask which one you want to open. Replay screenshots and preferences stay on your computer. When you ask it to describe the screen, that image is sent to the AI model active in MomAI — local or cloud, depending on your configuration.

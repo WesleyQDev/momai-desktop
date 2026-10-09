@@ -211,7 +211,7 @@ function assignRefs(rawNodes, opts) {
   const maxNodes = opts && opts.maxNodes ? opts.maxNodes : MAX_NODES_DEFAULT
   const maxDepth = opts && opts.maxDepth ? opts.maxDepth : MAX_DEPTH_DEFAULT
   const list = Array.isArray(rawNodes) ? rawNodes : []
-  const useful = []
+  const useful: any[] = []
   const seen = new Set()
   for (const raw of list) {
     if (!isNodeUseful(raw, maxDepth)) continue
@@ -263,7 +263,7 @@ function findNodes(nodes, query, role) {
   const list = Array.isArray(nodes) ? nodes : []
   const queryNorm = normalizeText(query)
   const roleNorm = normalizeText(role)
-  const scored = []
+  const scored: Array<{ node: any; score: number }> = []
   for (const node of list) {
     if (roleNorm && normalizeText(node.control).replace(/\s+/g, '') !== roleNorm.replace(/\s+/g, '')) continue
     const score = scoreNode(node, queryNorm)

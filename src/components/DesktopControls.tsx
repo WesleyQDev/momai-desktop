@@ -132,7 +132,7 @@ export default function DesktopControls() {
           type="button"
           disabled={saving}
           onClick={handleSave}
-          className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-accent/90 text-white hover:bg-accent disabled:opacity-50"
+          className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-accent/90 text-bg hover:bg-accent disabled:opacity-50"
         >
           {saving ? '...' : t('controls.save')}
         </button>

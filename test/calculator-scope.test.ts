@@ -66,19 +66,15 @@ describe('normalizeCalculatorSteps scoping', () => {
     )
     expect(off[1]).toMatchObject({ op: 'type', text: '10' })
   })
-  it('converts button clicks on calculator digits and operators into a merged press burst', () => {
-    const out = normalizeCalculatorSteps([
+  it('keeps click steps untouched (calculator runs press the expression, not buttons)', () => {
+    const steps = [
       { op: 'launch', query: 'calculadora' },
       { op: 'click', name: 'Um' },
-      { op: 'click', name: 'Zero' },
       { op: 'click', name: 'Multiplicar por' },
       { op: 'click', name: 'Cinco' },
-      { op: 'click', name: 'Igual a' },
       { op: 'close' },
-    ])
-    expect(out).toHaveLength(3)
-    expect(out[0]).toEqual({ op: 'launch', query: 'calculadora' })
-    expect(out[1]).toEqual({ op: 'press', key: '10*5=' })
-    expect(out[2]).toEqual({ op: 'close' })
+    ]
+    const out = normalizeCalculatorSteps(steps)
+    expect(out).toEqual(steps)
   })
 })

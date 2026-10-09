@@ -21,9 +21,9 @@ const storageBase = wpath.join(dataDir, 'extensions', skillId || 'momai-desktop'
 
 // Host-owned SQLite over IPC (isolated per dev mode). storageDir stays as the
 // display path; reads/writes go through storage-request like other workers.
-const { createIpcDesktopStorage } = require('./ipc-storage.ts')
-let storageResponseListener = null
-const ipcBridge = createIpcDesktopStorage({
+const { createIpcDesktopStorage: createDesktopStorage } = require('./ipc-storage.ts')
+let storageResponseListener: ((msg: any) => void) | null = null
+const ipcBridge = createDesktopStorage({
   send: (msg) => send(msg),
   onResponse: (fn) => {
     storageResponseListener = fn
@@ -102,7 +102,7 @@ function loadRuntime() {
   return require(runtimePath)
 }
 
-let runtime = null
+let runtime: any = null
 let isShuttingDown = false
 
 function clearRuntimeCache() {
@@ -131,13 +131,13 @@ async function shutdown() {
   } catch {
     /* best effort */
   }
-  process.exit(0)
+  process.exit?.(0)
 }
 
-process.on('SIGTERM', () => shutdown())
-process.on('SIGINT', () => shutdown())
+process.on?.('SIGTERM', () => shutdown())
+process.on?.('SIGINT', () => shutdown())
 
-process.on('message', async (msg) => {
+process.on?.('message', async (msg) => {
   if (!msg || typeof msg !== 'object') return
   if (msg.type === 'storage-response') {
     try {
@@ -157,7 +157,7 @@ process.on('message', async (msg) => {
     if (!runtime) runtime = loadRuntime()
     const result = await runtime.execute({ ...(payload || {}), momai })
     send({ type: 'response', requestId, result: result || { ok: true } })
-  } catch (err) {
+  } catch (err: any) {
     send({
       type: 'response',
       requestId,
@@ -171,7 +171,7 @@ process.on('message', async (msg) => {
     try {
       clearRuntimeCache()
       runtime = loadRuntime()
-    } catch (err) {
+    } catch (err: any) {
       send({ type: 'log', message: `Runtime reload failed: ${err.message}` })
     }
   }
@@ -182,10 +182,10 @@ try {
   send({ type: 'log', message: `Host initialized (PID: ${process.pid})` })
   send({ type: 'ready' })
   migrateLegacySharedJsonOnce().catch(() => {})
-} catch (err) {
+} catch (err: any) {
   send({ type: 'log', message: `Failed to load extension: ${err.message}` })
   send({ type: 'init_error', error: err.message })
-  process.exit(1)
+  process.exit?.(1)
 }
 
 setInterval(() => {

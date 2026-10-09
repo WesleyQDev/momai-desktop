@@ -30,7 +30,7 @@ export default function MomAIDesktopPanel() {
       <button
         type="button"
         onClick={() => navigateTo('/extensions/momai-desktop')}
-        className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-accent/90 text-white hover:bg-accent"
+        className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-accent/90 text-bg hover:bg-accent"
       >
         {t('card.openPage')}
       </button>

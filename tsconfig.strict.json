@@ -1,0 +1,14 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "strict": true,
+    "noImplicitAny": false
+  },
+  "include": [
+    "worker.ts",
+    "ipc-storage.ts",
+    "runtime-shim.d.ts",
+    "uia/**/*.ts",
+    "desktop/**/*.ts"
+  ]
+}

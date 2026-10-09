@@ -14,7 +14,8 @@ import {
 
 const POLL_MS = 2000
 
-export function useDesktopRuns() {
+export function useDesktopRuns(options?: { isActive?: boolean }) {
+  const isActive = options?.isActive ?? true
   const [runs, setRuns] = useState<DesktopRunSummary[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -29,6 +30,7 @@ export function useDesktopRuns() {
   }, [])
 
   useEffect(() => {
+    if (!isActive) return
     void refresh()
     const timer = setInterval(() => void refresh(), POLL_MS * 3)
     const off = subscribeToRunEvents(() => void refresh())
@@ -36,7 +38,7 @@ export function useDesktopRuns() {
       clearInterval(timer)
       off()
     }
-  }, [refresh])
+  }, [refresh, isActive])
 
   return { runs, loading, refresh }
 }

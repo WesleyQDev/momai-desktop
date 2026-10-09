@@ -166,7 +166,7 @@ async function captureScreenshot(outPath, opts) {
     await fs.promises.mkdir(require('node:path').dirname(dest), { recursive: true })
     await fs.promises.writeFile(dest, small)
     return { ok: true, path: dest }
-  } catch (err) {
+  } catch (err: any) {
     return { ok: false, error: err.message }
   }
 }
@@ -189,7 +189,7 @@ async function listDisplays() {
  * Returns [{ display, name, dataUrl }] — entries without image are skipped.
  */
 async function captureAllScreens() {
-  const out = []
+  const out: Array<{ display: number; name: string; dataUrl: string }> = []
   try {
     const screenshot = require('screenshot-desktop')
     const jpeg = require('jpeg-js')
@@ -254,7 +254,7 @@ async function describeScreen(question, screen) {
   if (shots.length === 0) return { ok: false, error: 'Screenshot failed on every display.' }
   const shot = pickDisplayShot(shots, screen) || shots[0]
   const prompt = String(question || 'Descreva em detalhes o que aparece nesta screenshot do computador.').slice(0, 500)
-  let res = null
+  let res: any = null
   try {
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), VISION_DESCRIBE_TIMEOUT_MS)
@@ -276,13 +276,13 @@ async function describeScreen(question, screen) {
     } finally {
       clearTimeout(timer)
     }
-  } catch (err) {
+  } catch (err: any) {
     return { ok: false, unavailable: true, error: `Vision request failed: ${err.message}` }
   }
   if (!res || !res.ok) {
     return { ok: false, unavailable: true, error: `Vision unavailable (HTTP ${res ? res.status : 'noresponse'})` }
   }
-  let data = null
+  let data: any = null
   try {
     data = await res.json()
   } catch {

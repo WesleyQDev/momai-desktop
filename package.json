@@ -1,13 +1,14 @@
 {
   "name": "momai-desktop",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "private": true,
   "description": "MomAI Desktop: open programs and automate them through the Windows accessibility tree.",
   "type": "commonjs",
   "scripts": {
     "build": "node build.mjs",
     "watch": "node build.mjs --watch",
-    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.strict.json",
+    "typecheck:strict": "tsc --noEmit -p tsconfig.strict.json",
     "typecheck:ui": "tsc --noEmit -p tsconfig.ui.json",
     "package": "node ../package-extension.mjs",
     "test": "vitest run"
@@ -25,5 +26,10 @@
   "dependencies": {
     "jpeg-js": "^0.4.4",
     "screenshot-desktop": "^1.15.6"
+  },
+  "pnpm": {
+    "overrides": {
+      "brace-expansion": "^1.1.21"
+    }
   }
 }

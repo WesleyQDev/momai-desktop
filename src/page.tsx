@@ -2,6 +2,7 @@
  * MomAI Desktop — page: history (expandable replay + timeline) and
  * guardrail controls. Composition only; state lives in hooks.
  */
+import { useExtensionVisibility } from 'momai:sdk'
 import { registerRenderer } from './registry-bridge'
 import DesktopRunCard from './components/DesktopRunCard'
 import RunHistory from './components/RunHistory'
@@ -11,9 +12,10 @@ import { useI18n } from './hooks/useI18n'
 
 registerRenderer('momai-desktop-run', DesktopRunCard)
 
-export default function MomAIDesktopPage() {
+export default function MomAIDesktopPage(props?: { isActive?: boolean }) {
+  const isPageActive = useExtensionVisibility(props?.isActive, 'momai-desktop')
   const { t } = useI18n()
-  const { runs } = useDesktopRuns()
+  const { runs } = useDesktopRuns({ isActive: isPageActive })
 
   return (
     <div className="h-full overflow-y-auto p-4 md:p-6">

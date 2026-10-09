@@ -6,6 +6,7 @@ import type { DesktopRunSummary } from '../services/desktop-api'
 import { getFrames, type ReplayFrame } from '../services/desktop-api'
 import { useDesktopRun } from '../hooks/useDesktopRun'
 import { useI18n } from '../hooks/useI18n'
+import { runStatusLabel } from './runStatus'
 import RunReplay from './RunReplay'
 import RunTimeline from './RunTimeline'
 
@@ -47,7 +48,7 @@ export default function HistoryRow({ run }: { run: DesktopRunSummary }) {
           <span className="text-[12px] font-medium text-text truncate flex-1">
             {run.objective || run.id}
           </span>
-          <span className="text-[10px] text-text-muted shrink-0">{status}</span>
+          <span className="text-[10px] text-text-muted shrink-0">{runStatusLabel(status, t)}</span>
           <span className="text-[10px] text-text-muted shrink-0">
             {run.totalSteps} {t('run.steps')}
           </span>

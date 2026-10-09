@@ -38,7 +38,9 @@ export default function RunHistory({ runs }: { runs: DesktopRunSummary[] }) {
         ))}
       </div>
       {visible.length === 0 ? (
-        <p className="text-[12px] text-text-muted">{t('run.noRuns')}</p>
+        <p className="text-[12px] text-text-muted">
+          {runs.length === 0 ? t('run.noRuns') : t('history.filter.empty')}
+        </p>
       ) : (
         <div className="flex flex-col gap-1.5">
           {visible.map((run) => (

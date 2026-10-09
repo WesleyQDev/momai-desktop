@@ -14,7 +14,7 @@ function stepDot(kind: string): string {
 export default function RunTimeline({ steps }: { steps: RunStep[] }) {
   const { t } = useI18n()
   if (!steps || steps.length === 0) {
-    return <p className="text-[12px] text-text-muted">{t('run.noRuns')}</p>
+    return <p className="text-[12px] text-text-muted">{t('run.noSteps')}</p>
   }
   return (
     <div className="flex flex-col ml-1 relative">

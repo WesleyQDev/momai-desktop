@@ -7,6 +7,7 @@ import { useEffect, useState } from 'react'
 import { navigateTo } from '../registry-bridge'
 import { getFrames, type ReplayFrame } from '../services/desktop-api'
 import { useI18n } from '../hooks/useI18n'
+import { runStatusLabel } from './runStatus'
 
 interface RunCardData {
   runId?: string
@@ -17,14 +18,6 @@ interface RunCardData {
 }
 
 const IMAGE_MS = 1500
-
-function statusLabel(status: string, t: (k: string) => string): string {
-  if (status === 'active') return t('run.active')
-  if (status === 'done') return t('run.done')
-  if (status === 'error') return t('run.error')
-  if (status === 'stopped') return t('run.stopped')
-  return status
-}
 
 export default function DesktopRunCard({ data }: { data?: RunCardData }) {
   const { t } = useI18n()
@@ -88,7 +81,7 @@ export default function DesktopRunCard({ data }: { data?: RunCardData }) {
       ) : null}
       <p className="px-4 py-2 text-[12px] text-text truncate">
         {data.objective || 'MomAI Desktop'}
-        <span className="text-text-muted"> • {statusLabel(status, t)}</span>
+        <span className="text-text-muted"> • {runStatusLabel(status, t)}</span>
       </p>
       {data.screenOpaque === true ? (
         <p className="px-4 pb-2 text-[11px] text-text-muted">{t('card.opaqueHint')}</p>

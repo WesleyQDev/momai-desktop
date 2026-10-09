@@ -27,4 +27,4 @@ Em vez de procurar ícones na área de trabalho ou navegar por diversas pastas, 
 
 ## Segurança e Privacidade
 
-A extensão MomAI Desktop opera exclusivamente de acordo com os seus pedidos expressos e respeita todas as permissões da sua conta de usuário no Windows. Nenhum programa ou pasta é executado em segundo plano sem a sua solicitação. Os dados das execuções ficam só no seu computador.
+A extensão MomAI Desktop opera exclusivamente de acordo com os seus pedidos expressos e respeita todas as permissões da sua conta de usuário no Windows. Nenhum programa ou pasta é executado em segundo plano sem a sua solicitação. As capturas do replay visual e as preferências ficam no seu computador. Ao pedir para descrever a tela, a imagem é enviada ao modelo de IA ativo no MomAI — que pode ser local ou em nuvem, conforme a sua configuração.

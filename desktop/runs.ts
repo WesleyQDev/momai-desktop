@@ -2,11 +2,11 @@ const SNAPSHOT_TTL_MS = 90_000
 const MAX_RUNS = 30
 const MAX_STEPS_PER_RUN = 100
 
-const snapshots = new Map()
-const runs = new Map()
+const snapshots = new Map<string, { snapshot: any; storedAt: number }>()
+const runs = new Map<string, any>()
 let snapshotSeq = 0
 let runSeq = 0
-let settingsCache = null
+let settingsCache: any = null
 
 function nowIso() {
   return new Date().toISOString()
@@ -47,7 +47,7 @@ function getSnapshot(id) {
 }
 
 function latestSnapshot() {
-  let best = null
+  let best: any = null
   for (const [id, entry] of snapshots) {
     if (Date.now() - entry.storedAt > SNAPSHOT_TTL_MS) {
       snapshots.delete(id)
@@ -85,7 +85,7 @@ function getRun(id) {
 }
 
 function latestActiveRun() {
-  let best = null
+  let best: any = null
   for (const run of runs.values()) {
     if (run.status !== 'active') continue
     if (!best || run.updatedAt > best.updatedAt) best = run

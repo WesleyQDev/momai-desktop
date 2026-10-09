@@ -44,4 +44,19 @@ describe('exposed desktop tool surface', () => {
     expect((manifest.tools || []).map((tool) => tool.name)).not.toContain('desktop_act')
     expect(readExtensionFile('SKILL.md')).not.toContain('desktop_act')
   })
+
+  it('keeps the manifest and runtime tool sets aligned', () => {
+    const manifest = JSON.parse(readExtensionFile('manifest.json')) as {
+      tools?: Array<{ name: string }>
+    }
+    const manifestNames = (manifest.tools || [])
+      .map((tool) => tool.name)
+      .filter(Boolean)
+      .sort()
+    const runtimeNames = runtime.tools
+      .map((tool) => tool.name)
+      .filter(Boolean)
+      .sort()
+    expect(runtimeNames).toEqual(manifestNames)
+  })
 })

@@ -5,10 +5,11 @@ const require = createRequire(import.meta.url)
 const runtime = require('../runtime.ts') as {
   __internals: {
     normalizePressKey: (key: unknown) => string
+    escapeCalculatorPressKey: (key: unknown, appName: unknown) => string
   }
 }
 
-const { normalizePressKey } = runtime.__internals
+const { normalizePressKey, escapeCalculatorPressKey } = runtime.__internals
 
 describe('normalizePressKey', () => {
   it('maps natural key names to SendKeys tokens', () => {
@@ -52,5 +53,21 @@ describe('normalizePressKey', () => {
     expect(normalizePressKey('10')).toBe('10')
     expect(normalizePressKey('')).toBe('')
     expect(normalizePressKey('a')).toBe('a')
+  })
+})
+
+describe('escapeCalculatorPressKey', () => {
+  it('escapes SendKeys modifiers in calculator expressions', () => {
+    expect(escapeCalculatorPressKey('10+5{ENTER}', 'Calculadora')).toBe('10{+}5{ENTER}')
+    expect(escapeCalculatorPressKey('2(3+4)', 'Calculator')).toBe('2{(}3{+}4{)}')
+    expect(escapeCalculatorPressKey('50%', 'calculadora')).toBe('50{%}')
+  })
+
+  it('leaves shortcuts, tokens and other apps untouched', () => {
+    expect(escapeCalculatorPressKey('^c', 'Calculadora')).toBe('^c')
+    expect(escapeCalculatorPressKey('%{F4}', 'Calculadora')).toBe('%{F4}')
+    expect(escapeCalculatorPressKey('{TAB}', 'Calculadora')).toBe('{TAB}')
+    expect(escapeCalculatorPressKey('10+5', 'Excel')).toBe('10+5')
+    expect(escapeCalculatorPressKey('10+5', '')).toBe('10+5')
   })
 })

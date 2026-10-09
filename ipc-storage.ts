@@ -5,12 +5,12 @@
 // JSON files in the shared extensions directory.
 
 function codedError(code, message) {
-  const err = new Error(message)
+  const err: any = new Error(message)
   err.code = code
   return err
 }
 
-function createIpcDesktopStorage({ send, onResponse, storageDir, timeoutMs = 30000 } = {}) {
+function createIpcDesktopStorage({ send, onResponse, storageDir, timeoutMs = 30000 }: any = {}) {
   let seq = 0
   const pending = new Map()
 
@@ -38,7 +38,7 @@ function createIpcDesktopStorage({ send, onResponse, storageDir, timeoutMs = 300
       if (timer.unref) timer.unref()
       pending.set(requestId, { resolve, reject, timer })
       try {
-        send({ type: 'storage-request', requestId, method, args })
+        send({ type: 'storage-request', requestId, method, args, extensionId: 'momai-desktop' })
       } catch (err) {
         pending.delete(requestId)
         clearTimeout(timer)

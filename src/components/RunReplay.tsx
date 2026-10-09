@@ -69,7 +69,7 @@ export default function RunReplay({ frames, truncated }: { frames: ReplayFrame[]
         <button
           type="button"
           onClick={() => setPlaying((p) => !p)}
-          className="px-3 py-1 rounded-lg text-xs font-semibold bg-accent/90 text-white hover:bg-accent"
+          className="px-3 py-1 rounded-lg text-xs font-semibold bg-accent/90 text-bg hover:bg-accent"
         >
           {playing ? t('replay.pause') : t('replay.play')}
         </button>
