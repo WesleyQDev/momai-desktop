@@ -1,6 +1,6 @@
 ---
 name: MomAI Desktop
-description: Abre programas, pastas e arquivos no computador, automatiza a tela lendo os botões pelo nome e mostra ou detalha screenshots. Use quando o usuário pedir para abrir algo, clicar, digitar, automatizar uma tarefa ou perguntar o que aparece na tela.
+description: Abre visualmente janelas de programas, aplicativos da Loja, pastas no Windows Explorer ou arquivos na tela do computador, além de automatizar ações na interface gráfica (clicar em botões, digitar em campos, enviar atalhos de teclado), inspecionar elementos visuais da tela ativa via acessibilidade e tirar prints/screenshots da tela do computador (um monitor, todos os monitores ou uma janela de programa), salvos como arquivo de imagem. Use quando o usuário pedir explicitamente para abrir um aplicativo ou janela para ver na tela, clicar, digitar, automatizar uma tarefa em um programa aberto ou tirar um print da tela.
 ---
 
 # MomAI Desktop
@@ -8,7 +8,9 @@ description: Abre programas, pastas e arquivos no computador, automatiza a tela 
 Abre itens locais e automatiza programas. A tela é lida pela árvore de
 acessibilidade do Windows (UI Automation), em texto: o `desktop_snapshot`
 lista botões e campos com nome e ref numerada, e não tira print.
-Screenshots existem para o replay e para mostrar a tela ao usuário.
+Print é arquivo: `desktop_screenshot` salva em disco (pasta de capturas, com
+retenção) e devolve caminhos — mostre com `desktop_show_image` ou passe o
+caminho para outra ferramenta (anexo de e-mail etc.).
 
 A automação é passo a passo: leia a tela, aja em UM elemento e use a tela
 que a própria ação devolve no passo seguinte. As ações
@@ -33,8 +35,9 @@ precisa tirar snapshot de novo entre um passo e outro.
 | `desktop_click {ref, snapshotId?}` | Clica na ref, preferindo o padrão em segundo plano |
 | `desktop_type {ref, text, submit?, snapshotId?}` | Digita num campo da ref; `submit:true` dá Enter |
 | `desktop_press {ref, key, snapshotId?}` | Pressiona tecla com a ref focada (SendKeys: `{ENTER}`, `{TAB}`, `^c`) |
-| `desktop_describe {question?, screen?}` | Detalha o que aparece na tela, para orientar em área opaca. Precisa de modelo com visão |
-| `desktop_screenshot {screen?}` | Mostra a tela ao usuário como imagem no chat |
+| `desktop_describe {question?, screen?, app?}` | Detalha o que aparece numa tela ou janela, para orientar em área opaca. Precisa de modelo com visão |
+| `desktop_screenshot {scope?, screen?, app?}` | Print = arquivo, sem chat. `scope:"display"` (padrão), `"all"` (todos os monitores) ou `"window"` com `app`. Devolve caminhos absolutos |
+| `desktop_show_image {paths, title?}` | Mostra no chat imagens já salvas (caminhos do `desktop_screenshot` ou qualquer imagem) |
 | `desktop_get_run {runId?}` | Mostra a execução com a linha do tempo dos passos |
 
 `desktop_get_frames`, `desktop_list_runs` e `desktop_settings` são de uso do
@@ -49,7 +52,10 @@ page: o modelo não precisa chamar.
 - "abra minha pasta de Downloads" → `search_local_items` + `open_local_item`
 - "clique em Salvar no Bloco de Notas" → `desktop_snapshot` → `desktop_find` → `desktop_click`
 - "digite meu e-mail no campo" → `desktop_snapshot` → `desktop_type {ref, text}`
-- "o que tem na minha tela?" → `desktop_screenshot` (mostra) e/ou `desktop_describe` (detalha)
+- "o que tem na minha tela?" → `desktop_describe` (detalha); para ver, `desktop_screenshot` → `desktop_show_image {paths:[...]}`
+- "tire um print da tela" → `desktop_screenshot` sem `scope`: UMA tela, a que está em uso (outro monitor só com `screen`)
+- "tira um print de tudo" → `desktop_screenshot {scope:"all"}` (um arquivo por monitor)
+- "print da janela do Bloco de Notas" → `desktop_screenshot {scope:"window", app:"Notepad"}`
 - "o que você fez?" → `desktop_get_run`
 
 ## Sequência
@@ -76,12 +82,7 @@ Telas opacas (canvas, jogos, frames sem acessibilidade) não são clicáveis:
 use `desktop_describe`. Se o snapshot avisar TELA OPACA, não tire outro
 snapshot: a árvore não muda.
 
-Para ARQUIVOS E PASTAS, ache uma vez (`search_local_items`) e abra o melhor
-resultado (`open_local_item`, preferindo Programa/Atalho com maior score).
-Se dois candidatos forem igualmente prováveis e a tarefa for só abrir, aí
-sim pergunte; se a tarefa continua (clicar, digitar, automatizar), abra o
-melhor e siga — o snapshot confirma se acertou. Abra o nome exato pedido: um
-navegador não substitui um app instalado para o serviço.
+Para ARQUIVOS E PASTAS, o `open_local_item` é utilizado quando o usuário pede explicitamente para ABRIR na tela (para ver no Explorer ou no aplicativo associado). Para consultas sobre conteúdos de pastas ou arquivos (ex: "o que tem na pasta X?", "quantos arquivos tem em downloads?"), isso NÃO é automação visual: use ferramentas de sistema de arquivos/disco sem abrir janelas. Quando for para abrir visualmente, ache uma vez (`search_local_items`) e abra o melhor resultado (`open_local_item`, preferindo Programa/Atalho com maior score).
 
 Exemplo ("abra o <programa>, crie um novo <documento> e digite <texto>"):
 `desktop_launch` → `desktop_find {query:"<opção de novo>"}` →

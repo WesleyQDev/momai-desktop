@@ -63,7 +63,7 @@ export default function HistoryRow({ run }: { run: DesktopRunSummary }) {
               type="button"
               disabled={stopping}
               onClick={stop}
-              className="self-start px-3 py-1.5 rounded-lg text-xs font-semibold border border-border/30 text-text-muted hover:text-text disabled:opacity-50"
+              className="self-start px-3 py-1.5 rounded-lg text-xs font-semibold border border-border/30 text-text-muted hover:text-text hover:bg-input/60 disabled:opacity-50"
             >
               {stopping ? t('run.stopping') : t('run.stop')}
             </button>

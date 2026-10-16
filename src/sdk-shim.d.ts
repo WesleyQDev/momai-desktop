@@ -28,4 +28,15 @@ export interface MomAISDK {
   }
 }
 
+export interface ExtensionLifecycleCallbacks {
+  onShow?: () => void
+  onHide?: () => void
+}
+
 export declare function getSDK(): MomAISDK
+
+export declare function useExtensionVisibility(
+  propIsActive?: boolean,
+  extensionId?: string,
+  callbacks?: ExtensionLifecycleCallbacks
+): boolean

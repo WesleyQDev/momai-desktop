@@ -1,7 +1,7 @@
 {
   "id": "momai-desktop",
   "name": "MomAI Desktop",
-  "version": "2.2.0",
+  "version": "2.3.0",
   "description": "Abra programas e automatize tarefas: a MomAI enxerga os botões da tela e mostra cada passo.",
   "category": "utility",
   "tags": [
@@ -503,7 +503,7 @@
       "name": "desktop_describe",
       "target": "client",
       "clientType": "desktop",
-      "description": "Looks at the current screen and describes it in detail, or answers a question about what is visible. Use when the user asks what is on screen, or to orient in a tricky opaque area (canvas, custom UI). Needs a vision-capable model; otherwise explains the limit.",
+      "description": "Looks at a screen or a program window and describes it in detail, or answers a question about what is visible. Use when the user asks what is on screen, or to orient in a tricky opaque area (canvas, custom UI). Nothing is written to disk. Needs a vision-capable model; otherwise explains the limit.",
       "parameters": {
         "type": "object",
         "properties": {
@@ -513,7 +513,11 @@
           },
           "screen": {
             "type": "number",
-            "description": "Display index for multi-monitor setups (default: primary)"
+            "description": "Display index for multi-monitor setups (default: the screen in use)"
+          },
+          "app": {
+            "type": "string",
+            "description": "Describe a program window instead of a display, e.g. \"Notepad\" (name or window title)"
           }
         }
       }
@@ -522,30 +526,65 @@
       "name": "desktop_screenshot",
       "target": "client",
       "clientType": "desktop",
-      "description": "Shows the current screen to the USER as images in chat (one per display, or a single display via \"screen\"). Use when the user wants to SEE the screen, or asks what is on it and also wants the image. For the model to orient itself, use desktop_describe instead.",
+      "description": "Print/screenshot of the computer SCREEN: saves a JPEG file on disk, nothing appears in chat. A plain print is scope:\"display\" (ONE screen — the one in use; screen picks another monitor); use \"all\" only when the user asks for every monitor, or \"window\" with app for one program window (works behind the foreground). Returns the absolute file path(s): show them with desktop_show_image, or pass a path to a tool that accepts a file (e-mail attachment, documents).",
       "parameters": {
         "type": "object",
         "properties": {
+          "scope": {
+            "type": "string",
+            "enum": [
+              "display",
+              "all",
+              "window"
+            ],
+            "description": "display (default): one screen, the one in use; all: every monitor, one file each (only when the user asks for all); window: one program window (with app)"
+          },
           "screen": {
             "type": "number",
-            "description": "Display index (default: all displays)"
+            "description": "Display index for scope \"display\" (0 = first monitor). Omit it for a plain print: the screen in use is captured automatically"
+          },
+          "app": {
+            "type": "string",
+            "description": "Program name or window title for scope \"window\", e.g. \"Notepad\""
+          }
+        }
+      }
+    },
+    {
+      "name": "desktop_show_image",
+      "target": "client",
+      "clientType": "desktop",
+      "description": "Shows captured screenshots/prints to the USER as image cards in chat. Use when the user wants to SEE a print: take it first with desktop_screenshot and pass the returned path(s) here. Accepts absolute paths (any image on this computer) or a file name inside the captures folder.",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "paths"
+        ],
+        "properties": {
+          "paths": {
+            "type": "array",
+            "description": "Image file paths to show (paths returned by desktop_screenshot, or any image file)",
+            "items": {
+              "type": "string"
+            }
+          },
+          "title": {
+            "type": "string",
+            "description": "Optional card title"
           }
         }
       }
     }
   ],
-  "toolPriority": {
-    "label": "DESKTOP",
-    "rule": "usar ferramentas de desktop quando o usuario pedir para abrir programas, pastas ou arquivos, ou para clicar, digitar e automatizar algo na tela do computador."
-  },
   "theme": {
     "gradient": "from-indigo-600 to-violet-500",
     "accent": "violet"
   },
   "storage": {
-    "description": "Indice local de programas, preferencias do Desktop (lista de apps, limites, modo de aprovacao e replay) no armazenamento do MomAI e capturas do replay visual no cache local da extensao (um screenshot por passo, com retencao).",
+    "description": "Indice local de programas, preferencias do Desktop (lista de apps, limites, modo de aprovacao e replay) no armazenamento do MomAI, capturas de tela salvas em arquivos (captures/, com retencao automatica, prontas para mostrar no chat ou anexar em outras ferramentas) e capturas do replay visual no cache local da extensao (um screenshot por passo, com retencao).",
     "locations": [
-      "frames/*.jpg"
+      "frames/*.jpg",
+      "captures/*.jpg"
     ]
   }
 }

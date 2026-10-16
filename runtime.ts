@@ -743,6 +743,7 @@ const STR = {
     searched: (x) => `Busquei "${x}"`,
     relocated: (x) => `Tela mudou, achou "${x}" de novo e tentando`,
     focusChanged: (a, b) => `Foco mudou de "${a}" para "${b}"`,
+    displayLabel: (n) => `Tela ${n}`,
   },
   'en-US': {
     launched: (x) => `Opened "${x}"`,
@@ -756,6 +757,7 @@ const STR = {
     searched: (x) => `Searched "${x}"`,
     relocated: (x) => `Screen changed, relocated "${x}" and retrying`,
     focusChanged: (a, b) => `Focus changed from "${a}" to "${b}"`,
+    displayLabel: (n) => `Display ${n}`,
   },
 }
 function t(key, a?, b?) {
@@ -1690,7 +1692,7 @@ async function captureRunFrame(run, label, context?) {
     await fs.promises.mkdir(dir, { recursive: true })
     pruneRunFrames()
     const file = `step-${String(existing + 1).padStart(2, '0')}.jpg`
-    const res = await uiaProvider.captureScreenshot(path.join(dir, file))
+    const res = await uiaProvider.captureDisplayToFile(path.join(dir, file))
     if (res && res.ok === true) {
       const rel = `${safe}/${file}`
       desktopRuns.appendStep(run.id, { kind: 'frame', label: String(label || '').slice(0, 300), frame: rel, context: context || undefined })
@@ -1780,6 +1782,195 @@ function shouldFlagOpaqueScreen(snapshot) {
     return uiaNodes.isTreeOpaque(snapshot.nodes)
   } catch {
     return false
+  }
+}
+
+/* ── Captures: prints saved as files, attachment style ──
+   desktop_screenshot only produces files; showing them in chat is
+   desktop_show_image's job. The absolute paths stay usable by other tools
+   (e-mail attachments, documents, media), so a print is not a dead end.
+   The folder is temporary by construction: every capture prunes old files. */
+
+const MAX_CAPTURE_FILES = 50
+const CAPTURE_RETENTION_MS = 24 * 60 * 60 * 1000
+const CAPTURE_MAX_WIDTH = 1920
+const CAPTURE_JPEG_QUALITY = 80
+const CAPTURE_SHOW_MAX_WIDTH = 1280
+const CAPTURE_SHOW_JPEG_QUALITY = 70
+const MAX_CAPTURE_FILE_BYTES = 6 * 1024 * 1024
+/* Formats without a decoder here (png/webp/gif) are embedded as they are up
+   to this ceiling; bigger ones only make sense as files for other tools. */
+const MAX_SHOW_EMBED_BYTES = 2 * 1024 * 1024
+const MAX_SHOW_IMAGES = 6
+const IMAGE_FILE_RE = /\.(png|jpe?g|webp|gif|bmp)$/i
+const IMAGE_MIME_TYPES = {
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.png': 'image/png',
+  '.webp': 'image/webp',
+  '.gif': 'image/gif',
+  '.bmp': 'image/bmp',
+}
+const CAPTURE_POLICY = { maxWidth: CAPTURE_MAX_WIDTH, quality: CAPTURE_JPEG_QUALITY }
+
+/* Mode-scoped extension data dir (same root the host serves for extension
+   storage); falls back to the data layout the worker was spawned with. */
+function capturesBaseDir() {
+  const storageDir = process.env.MOMAI_EXTENSION_STORAGE_DIR || ''
+  if (storageDir) return path.join(storageDir, 'captures')
+  const dataDir = process.env.MOMAI_DATA_DIR || process.env.MOMAI_NODE_CORE_DATA_DIR || ''
+  const extId = process.env.MOMAI_EXTENSION_ID || 'momai-desktop'
+  if (!dataDir) return null
+  return path.join(dataDir, 'extensions', extId, 'captures')
+}
+
+/* Pure: files to delete so the captures folder stays bounded — everything
+   older than maxAgeMs, plus the oldest files above maxFiles. */
+function selectCapturesToPrune(entries, opts) {
+  const list = Array.isArray(entries) ? entries : []
+  const maxFiles = opts && Number.isFinite(opts.maxFiles) ? opts.maxFiles : MAX_CAPTURE_FILES
+  const maxAgeMs = opts && Number.isFinite(opts.maxAgeMs) ? opts.maxAgeMs : CAPTURE_RETENTION_MS
+  const now = opts && Number.isFinite(opts.now) ? opts.now : Date.now()
+  const sorted = list
+    .filter((entry) => entry && typeof entry.name === 'string' && entry.name)
+    .slice()
+    .sort((a, b) => Number(b.mtimeMs || 0) - Number(a.mtimeMs || 0))
+  const doomed = []
+  sorted.forEach((entry, index) => {
+    const ageMs = now - Number(entry.mtimeMs || 0)
+    if (index >= maxFiles || ageMs > maxAgeMs) doomed.push(entry.name)
+  })
+  return doomed
+}
+
+function pruneCaptures() {
+  try {
+    const base = capturesBaseDir()
+    if (!base || !fs.existsSync(base)) return
+    const entries = fs.readdirSync(base).map((name) => {
+      let mtimeMs = 0
+      try {
+        mtimeMs = fs.statSync(path.join(base, name)).mtimeMs
+      } catch {
+        mtimeMs = 0
+      }
+      return { name, mtimeMs }
+    })
+    for (const name of selectCapturesToPrune(entries, {
+      maxFiles: MAX_CAPTURE_FILES,
+      maxAgeMs: CAPTURE_RETENTION_MS,
+    })) {
+      try {
+        fs.rmSync(path.join(base, name), { force: true })
+      } catch {
+        /* best effort */
+      }
+    }
+  } catch {
+    /* pruning is best effort */
+  }
+}
+
+/* Pure: file name for a capture. `suffix` identifies the target (d1, d2, win)
+   and `token` keeps two captures in the same second apart. */
+function captureFileName(now, suffix, token) {
+  const date = now instanceof Date ? now : new Date(now || Date.now())
+  const pad = (n) => String(n).padStart(2, '0')
+  const stamp =
+    `${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}` +
+    `-${pad(date.getHours())}${pad(date.getMinutes())}${pad(date.getSeconds())}`
+  const safeSuffix =
+    String(suffix || 'shot').toLowerCase().replace(/[^a-z0-9-]+/g, '').slice(0, 16) || 'shot'
+  const safeToken = String(token || '').toLowerCase().replace(/[^a-z0-9]+/g, '').slice(0, 8)
+  return `capture-${stamp}-${safeSuffix}${safeToken ? `-${safeToken}` : ''}.jpg`
+}
+
+function nextCaptureToken() {
+  return Math.random().toString(36).slice(2, 6)
+}
+
+/* Pure: canonical capture scope from model input. `app` alone means the
+   program window; unknown values fall back to a single-display capture. */
+function resolveCaptureScope(scope, hasApp) {
+  const value = String(scope || '').trim().toLowerCase()
+  if (['all', 'todos', 'all_displays', 'all-displays', 'monitors'].includes(value)) return 'all'
+  if (['window', 'app', 'program', 'programa', 'janela', 'application'].includes(value)) return 'window'
+  if (['display', 'screen', 'monitor', 'tela', 'primary'].includes(value)) return 'display'
+  return hasApp ? 'window' : 'display'
+}
+
+/* Pure: resolves a path the model passed to show/describe an image. Absolute
+   paths are used as-is; anything else is treated as a bare file name inside
+   the captures folder, so a name from desktop_screenshot is enough. */
+function resolveImagePath(value, baseDir) {
+  const raw = String(value || '').trim().replace(/^"(.*)"$/, '$1')
+  if (!raw) return { ok: false, error: 'Empty image path' }
+  let full = raw
+  if (!path.isAbsolute(full)) {
+    if (!baseDir) return { ok: false, error: 'Relative image path without a captures folder' }
+    full = path.join(baseDir, path.basename(full))
+  }
+  const resolved = path.resolve(full)
+  if (!IMAGE_FILE_RE.test(resolved)) {
+    return { ok: false, error: `Not an image file: ${path.basename(resolved)}` }
+  }
+  return { ok: true, path: resolved }
+}
+
+/* Reads one image file for the chat card. Oversized JPEGs are downscaled to
+   the card policy; other formats are embedded as-is within the size cap. */
+function readCaptureDataUrl(fullPath) {
+  try {
+    const stat = fs.statSync(fullPath)
+    if (!stat.isFile()) return { ok: false, error: 'not a file' }
+    if (stat.size > MAX_CAPTURE_FILE_BYTES) {
+      const mb = Math.round((stat.size / 1024 / 1024) * 10) / 10
+      return { ok: false, error: `file too large to show (${mb} MB)` }
+    }
+    const extension = path.extname(fullPath).toLowerCase()
+    const mime = IMAGE_MIME_TYPES[extension] || 'image/jpeg'
+    const isJpeg = extension === '.jpg' || extension === '.jpeg'
+    let bytes = fs.readFileSync(fullPath)
+    if (isJpeg && stat.size > MAX_THUMB_BYTES) {
+      const small = uiaProvider.downscaleJpegToLimit(bytes, CAPTURE_SHOW_MAX_WIDTH, CAPTURE_SHOW_JPEG_QUALITY)
+      if (small) bytes = small
+    } else if (!isJpeg && stat.size > MAX_SHOW_EMBED_BYTES) {
+      const mb = Math.round((stat.size / 1024 / 1024) * 10) / 10
+      return {
+        ok: false,
+        error: `image too large to show here (${mb} MB); the file path still works for other tools`,
+      }
+    }
+    return { ok: true, dataUrl: `data:${mime};base64,${bytes.toString('base64')}` }
+  } catch (err) {
+    return { ok: false, error: err && err.message ? err.message : String(err) }
+  }
+}
+
+/* Pure: payload of the `momai-desktop-image` chat card — one entry per image
+   (the card renders each one individually) and a title only when asked, so a
+   plain print has no extra chrome. */
+function buildImageCardPayload(title, images) {
+  const list = (Array.isArray(images) ? images : []).filter(
+    (image) => image && typeof image.url === 'string' && image.url
+  )
+  const data: { images: Array<{ url: string; label?: string }>; title?: string } = {
+    images: list.map((image) => ({ url: image.url, label: image.label })),
+  }
+  const cleanTitle = String(title || '').trim()
+  if (cleanTitle) data.title = cleanTitle
+  return { type: 'momai-desktop-image', data }
+}
+
+/* Resolves a program window for capture/describe: name or title match over the
+   currently open top-level windows (same matcher the launch binding uses). */
+async function findCaptureWindow(app) {
+  try {
+    const listed = await uiaProvider.listWindows()
+    const windows = listed && listed.ok === true && Array.isArray(listed.windows) ? listed.windows : []
+    return findLaunchWindow(windows, app)
+  } catch {
+    return null
   }
 }
 
@@ -2060,17 +2251,42 @@ async function handleDesktopTool({ toolName, args, content, momai }) {
     }
   }
 
-  /* ── desktop_describe: look at the screen and detail it ── */
+  /* ── desktop_describe: look at one screen/window and detail it ── */
   if (toolName === 'desktop_describe') {
     if (!uiaProvider.isSupported()) {
       return { tool: toolName, instruction: DESKTOP_NOT_SUPPORTED_MSG }
     }
     const question = String(params.question || '').trim()
-    const res = await uiaProvider.describeScreen(question, params.screen)
+    const app = String(params.app || '').trim()
+    let shot = null
+    let label = ''
+    if (app) {
+      const target = await findCaptureWindow(app)
+      if (!target) {
+        return {
+          tool: toolName,
+          instruction: `No open window matches "${app}". Check the program name, or open it first with desktop_launch.`,
+        }
+      }
+      label = stepContext(target.app, target.title) || app
+      shot = await uiaProvider.captureWindowDataUrl(target.hwnd)
+    } else {
+      shot = await uiaProvider.captureDisplayDataUrl(params.screen, { preferForeground: true })
+      if (shot.ok === true && typeof shot.display === 'number') {
+        label = t('displayLabel', shot.display + 1)
+      }
+    }
+    if (!shot || shot.ok !== true) {
+      return {
+        tool: toolName,
+        instruction: `Could not capture the target: ${(shot && shot.error) || 'unknown error'}`,
+      }
+    }
+    const res = await uiaProvider.describeImage(question, shot.dataUrl)
     if (res.ok) {
       return {
         tool: toolName,
-        instruction: `Screen (${res.display}):\n${res.text}`,
+        instruction: `Screen (${label || 'unknown'}):\n${res.text}`,
       }
     }
     if (res.unavailable) {
@@ -2082,48 +2298,167 @@ async function handleDesktopTool({ toolName, args, content, momai }) {
     return { tool: toolName, instruction: `Could not describe the screen: ${res.error}` }
   }
 
-  /* ── desktop_screenshot: show the screen to the USER ── */
+  /* ── desktop_screenshot: capture scope → image files on disk ──
+     Prints are attachments: the call only writes files and returns their
+     absolute paths. Showing them is desktop_show_image's job. ── */
   if (toolName === 'desktop_screenshot') {
     if (!uiaProvider.isSupported()) {
       return { tool: toolName, instruction: DESKTOP_NOT_SUPPORTED_MSG }
     }
-    const only = params.screen !== undefined && params.screen !== null && params.screen !== ''
-      ? Number(params.screen)
-      : null
-    let shots = []
-    if (only !== null && Number.isFinite(only)) {
-      const displays = await uiaProvider.listDisplays()
-      const picked = displays[only] || displays[0]
-      const all = await uiaProvider.captureAllScreens()
-      shots = all.filter((s) => !picked || s.name === picked.name || s.display === only)
-      if (shots.length === 0) shots = all.slice(0, 1)
-    } else {
-      shots = await uiaProvider.captureAllScreens()
+    const scope = resolveCaptureScope(params.scope, Boolean(String(params.app || '').trim()))
+    const base = capturesBaseDir()
+    if (!base) {
+      return {
+        tool: toolName,
+        instruction: 'Cannot save captures: the extension data directory is unavailable.',
+      }
     }
-    if (shots.length === 0) {
-      return { tool: toolName, instruction: 'Could not capture any screen.' }
+    const saved = []
+    const failed = []
+    try {
+      await fs.promises.mkdir(base, { recursive: true })
+      pruneCaptures()
+      if (scope === 'window') {
+        const app = String(params.app || '').trim()
+        if (!app) {
+          return {
+            tool: toolName,
+            instruction: 'scope "window" needs app: the program name or window title to capture.',
+          }
+        }
+        const target = await findCaptureWindow(app)
+        if (!target) {
+          return {
+            tool: toolName,
+            instruction: `No open window matches "${app}". Open the program first (desktop_launch) or check the name.`,
+          }
+        }
+        const label = stepContext(target.app, target.title) || app
+        const file = captureFileName(new Date(), 'win', nextCaptureToken())
+        const res = await uiaProvider.captureWindowToFile(
+          target.hwnd,
+          path.join(base, file),
+          CAPTURE_POLICY
+        )
+        if (res.ok === true) {
+          saved.push({ path: res.path, label, kind: 'window' })
+        } else {
+          failed.push({ label, error: String(res.error || 'capture failed') })
+        }
+      } else if (scope === 'all') {
+        const displays = await uiaProvider.listDisplays()
+        if (displays.length === 0) {
+          const file = captureFileName(new Date(), 'd1', nextCaptureToken())
+          const res = await uiaProvider.captureDisplayToFile(path.join(base, file), CAPTURE_POLICY)
+          if (res.ok === true) saved.push({ path: res.path, label: t('displayLabel', 1), kind: 'display' })
+          else failed.push({ label: t('displayLabel', 1), error: String(res.error || 'capture failed') })
+        }
+        for (let i = 0; i < displays.length; i++) {
+          const file = captureFileName(new Date(), `d${i + 1}`, nextCaptureToken())
+          const res = await uiaProvider.captureDisplayToFile(path.join(base, file), {
+            screen: i,
+            ...CAPTURE_POLICY,
+          })
+          if (res.ok === true) {
+            saved.push({ path: res.path, label: t('displayLabel', i + 1), kind: 'display', display: i })
+          } else {
+            failed.push({ label: t('displayLabel', i + 1), error: String(res.error || 'capture failed') })
+          }
+        }
+      } else {
+        const requested = Math.trunc(Number(params.screen))
+        const index = Number.isFinite(requested) && requested >= 0 ? requested : 0
+        const file = captureFileName(new Date(), `d${index + 1}`, nextCaptureToken())
+        const res = await uiaProvider.captureDisplayToFile(path.join(base, file), {
+          screen: params.screen,
+          preferForeground: true,
+          ...CAPTURE_POLICY,
+        })
+        if (res.ok === true) {
+          const shotIndex = typeof res.display === 'number' ? res.display : index
+          saved.push({ path: res.path, label: t('displayLabel', shotIndex + 1), kind: 'display', display: shotIndex })
+        } else {
+          failed.push({ label: t('displayLabel', index + 1), error: String(res.error || 'capture failed') })
+        }
+      }
+    } catch (err) {
+      return {
+        tool: toolName,
+        instruction: `Could not save the capture: ${err && err.message ? err.message : String(err)}`,
+      }
+    }
+    if (saved.length === 0) {
+      return {
+        tool: toolName,
+        instruction: JSON.stringify({
+          ok: false,
+          error: (failed[0] && failed[0].error) || 'capture failed',
+          failed,
+        }),
+      }
     }
     return {
       tool: toolName,
-      structuredResponse: {
-        type: 'generic-extension',
-        data: {
-          extension: 'momai-desktop',
-          header: {
-            icon: '',
-            title: shots.length === 1 ? 'Screenshot' : `${shots.length} screenshots`,
-            subtitle: shots.map((s) => s.name).join(' • '),
-          },
-          sections: shots.map((s, i) => ({
-            title: s.name,
-            items: [{ id: `screen-${i}`, type: 'Imagem', label: s.name, image_url: s.dataUrl }],
-          })),
-          footer: { text: 'MomAI Desktop' },
-        },
-      },
       instruction: JSON.stringify({
         ok: true,
-        message: `Showing ${shots.length} screenshot(s) to the user: ${shots.map((s) => s.name).join(', ')}.`,
+        scope,
+        saved: saved.map((item) => ({
+          path: item.path,
+          label: item.label,
+          kind: item.kind,
+          display: item.display,
+        })),
+        failed,
+        hint: 'Images are saved on disk. Show them to the user with desktop_show_image, or pass a path to another tool that accepts a file (e-mail attachments, documents, media).',
+      }),
+    }
+  }
+
+  /* ── desktop_show_image: show captured image files to the USER in chat ── */
+  if (toolName === 'desktop_show_image') {
+    const rawPaths = Array.isArray(params.paths)
+      ? params.paths
+      : params.paths !== undefined && params.paths !== null && params.paths !== ''
+        ? [params.paths]
+        : []
+    if (rawPaths.length === 0) {
+      return {
+        tool: toolName,
+        instruction: 'Give me paths: ["<capture path>", ...] — the paths returned by desktop_screenshot.',
+      }
+    }
+    const base = capturesBaseDir()
+    const shown = []
+    const missing = []
+    for (const raw of rawPaths.slice(0, MAX_SHOW_IMAGES)) {
+      const resolved = resolveImagePath(raw, base)
+      if (resolved.ok !== true) {
+        missing.push({ path: String(raw), error: resolved.error })
+        continue
+      }
+      const image = readCaptureDataUrl(resolved.path)
+      if (image.ok !== true) {
+        missing.push({ path: resolved.path, error: image.error })
+        continue
+      }
+      shown.push({ path: resolved.path, label: path.basename(resolved.path), dataUrl: image.dataUrl })
+    }
+    if (shown.length === 0) {
+      return {
+        tool: toolName,
+        instruction: JSON.stringify({ ok: false, error: 'No image could be shown.', missing }),
+      }
+    }
+    return {
+      tool: toolName,
+      structuredResponse: buildImageCardPayload(
+        params.title,
+        shown.map((item) => ({ url: item.dataUrl, label: item.label }))
+      ),
+      instruction: JSON.stringify({
+        ok: true,
+        shown: shown.map((item) => item.path),
+        missing,
       }),
     }
   }
@@ -3613,22 +3948,37 @@ module.exports = {
     },
     {
       name: 'desktop_describe',
-      description: 'Looks at the current screen and describes it in detail, or answers a question about what is visible. Use when the user asks what is on screen, or to orient in a tricky opaque area (canvas, custom UI). Needs a vision-capable model; otherwise explains the limit.',
+      description: 'Looks at a screen or a program window and describes it in detail, or answers a question about what is visible. Use when the user asks what is on screen, or to orient in a tricky opaque area (canvas, custom UI). Nothing is written to disk. Needs a vision-capable model; otherwise explains the limit.',
       parameters: {
         type: 'object',
         properties: {
           question: { type: 'string', description: 'What to detail about the screen (default: describe everything visible)' },
-          screen: { type: 'number', description: 'Display index for multi-monitor setups (default: primary)' },
+          screen: { type: 'number', description: 'Display index for multi-monitor setups (default: the screen in use)' },
+          app: { type: 'string', description: 'Describe a program window instead of a display, e.g. "Notepad" (name or window title)' },
         },
       },
     },
     {
       name: 'desktop_screenshot',
-      description: 'Shows the current screen to the USER as images in chat (one per display, or a single display via "screen"). Use when the user wants to SEE the screen, or asks what is on it and also wants the image. For the model to orient itself, use desktop_describe instead.',
+      description: 'Print/screenshot of the computer SCREEN: saves a JPEG file on disk, nothing appears in chat. A plain print is scope:"display" (ONE screen — the one in use; screen picks another monitor); use "all" only when the user asks for every monitor, or "window" with app for one program window (works behind the foreground). Returns the absolute file path(s): show them with desktop_show_image, or pass a path to a tool that accepts a file (e-mail attachment, documents).',
       parameters: {
         type: 'object',
         properties: {
-          screen: { type: 'number', description: 'Display index (default: all displays)' },
+          scope: { type: 'string', enum: ['display', 'all', 'window'], description: 'display (default): one screen, the one in use; all: every monitor, one file each (only when the user asks for all); window: one program window (with app)' },
+          screen: { type: 'number', description: 'Display index for scope "display" (0 = first monitor). Omit it for a plain print: the screen in use is captured automatically' },
+          app: { type: 'string', description: 'Program name or window title for scope "window", e.g. "Notepad"' },
+        },
+      },
+    },
+    {
+      name: 'desktop_show_image',
+      description: 'Shows captured screenshots/prints to the USER as image cards in chat. Use when the user wants to SEE a print: take it first with desktop_screenshot and pass the returned path(s) here. Accepts absolute paths (any image on this computer) or a file name inside the captures folder.',
+      parameters: {
+        type: 'object',
+        required: ['paths'],
+        properties: {
+          paths: { type: 'array', items: { type: 'string' }, description: 'Image file paths to show (paths returned by desktop_screenshot, or any image file)' },
+          title: { type: 'string', description: 'Optional card title' },
         },
       },
     },
@@ -3866,6 +4216,12 @@ module.exports.__internals = {
   normalizeSelectScrollSteps,
   isCalculatorAppName,
   stepsTargetCalculator,
+  capturesBaseDir,
+  captureFileName,
+  selectCapturesToPrune,
+  resolveCaptureScope,
+  resolveImagePath,
+  buildImageCardPayload,
 }
 
 

@@ -30,7 +30,7 @@ export default function RunHistory({ runs }: { runs: DesktopRunSummary[] }) {
             className={`px-2.5 py-1 rounded-lg text-[11px] font-medium border transition-colors ${
               filter === f
                 ? 'bg-accent/15 border-accent/40 text-text'
-                : 'border-border/30 text-text-muted hover:text-text'
+                : 'border-border/30 text-text-muted hover:text-text hover:bg-input/60'
             }`}
           >
             {t(`history.filter.${f}`)}

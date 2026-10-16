@@ -1,12 +1,20 @@
 /**
- * Guardrail controls: run limits, app allowlist, safe-stop on focus
- * change, visual replay. Each control carries a one-line explanation.
+ * Fields of one settings section. The page owns the section list and the
+ * view chrome (back button, title), so the component renders only the fields
+ * of the requested view plus the save action.
  */
 import { useEffect, useState } from 'react'
 import { readSettings, writeSettings } from '../services/desktop-api'
 import { useI18n } from '../hooks/useI18n'
 
-export default function DesktopControls() {
+export type ControlsView = 'overview' | 'limits' | 'apps' | 'safety'
+
+const FIELD_BASE =
+  'px-3 py-2 rounded-lg bg-input border border-border text-xs font-mono text-text placeholder:text-text-muted focus:outline-none focus:border-accent/40'
+const TEXT_FIELD = `w-full ${FIELD_BASE}`
+const NUM_FIELD = `mdx-input-num ${FIELD_BASE}`
+
+export default function DesktopControls({ view }: { view: ControlsView }) {
   const { t } = useI18n()
   const [allowlist, setAllowlist] = useState('')
   const [visuals, setVisuals] = useState(true)
@@ -65,80 +73,90 @@ export default function DesktopControls() {
   }
 
   return (
-    <div className="rounded-2xl bg-card border border-border p-4 flex flex-col gap-3">
-      <h3 className="text-[13px] font-semibold text-text">{t('controls.title')}</h3>
-      <div className="grid grid-cols-2 gap-3">
-        <label className="flex flex-col gap-1.5 text-[12px] text-text">
-          {t('controls.maxSteps')}
+    <div className="mdx-settings">
+      {view === 'limits' ? (
+        <>
+          <label className="mdx-row">
+            <span className="text-sm text-text">{t('controls.maxSteps')}</span>
+            <input
+              type="number"
+              min={1}
+              max={100}
+              value={maxSteps}
+              onChange={(e) => setMaxSteps(e.target.value)}
+              className={NUM_FIELD}
+            />
+          </label>
+          <label className="mdx-row">
+            <span className="text-sm text-text">{t('controls.maxMinutes')}</span>
+            <input
+              type="number"
+              min={0}
+              max={120}
+              value={maxMinutes}
+              onChange={(e) => setMaxMinutes(e.target.value)}
+              className={NUM_FIELD}
+            />
+          </label>
+          <p className="text-xs text-text-muted">{t('controls.limitsHint')}</p>
+        </>
+      ) : null}
+
+      {view === 'apps' ? (
+        <>
           <input
-            type="number"
-            min={1}
-            max={100}
-            value={maxSteps}
-            onChange={(e) => setMaxSteps(e.target.value)}
-            className="px-3 py-2 rounded-lg bg-input/60 border border-border/30 text-text text-[12px] font-mono"
+            type="text"
+            aria-label={t('controls.group.apps')}
+            value={allowlist}
+            onChange={(e) => setAllowlist(e.target.value)}
+            placeholder="notepad, chrome"
+            className={TEXT_FIELD}
           />
-        </label>
-        <label className="flex flex-col gap-1.5 text-[12px] text-text">
-          {t('controls.maxMinutes')}
-          <input
-            type="number"
-            min={0}
-            max={120}
-            value={maxMinutes}
-            onChange={(e) => setMaxMinutes(e.target.value)}
-            className="px-3 py-2 rounded-lg bg-input/60 border border-border/30 text-text text-[12px] font-mono"
-          />
-        </label>
-      </div>
-      <p className="text-[11px] text-text-muted -mt-1">{t('controls.limitsHint')}</p>
-      <label className="flex flex-col gap-1.5 text-[12px] text-text">
-        {t('controls.allowlist')}
-        <input
-          type="text"
-          value={allowlist}
-          onChange={(e) => setAllowlist(e.target.value)}
-          placeholder="notepad, chrome"
-          className="px-3 py-2 rounded-lg bg-input/60 border border-border/30 text-text text-[12px] font-mono"
-        />
-        <span className="text-[11px] text-text-muted">{t('controls.allowlistHint')}</span>
-      </label>
-      <label className="flex flex-col gap-1 cursor-pointer">
-        <span className="flex items-center gap-2 text-[12px] text-text">
-          <input
-            type="checkbox"
-            checked={safeStop}
-            onChange={(e) => setSafeStop(e.target.checked)}
-            className="accent-current"
-          />
-          {t('controls.safeStop')}
-        </span>
-        <span className="text-[11px] text-text-muted">{t('controls.safeStopHint')}</span>
-      </label>
-      <label className="flex flex-col gap-1 cursor-pointer">
-        <span className="flex items-center gap-2 text-[12px] text-text">
-          <input
-            type="checkbox"
-            checked={visuals}
-            onChange={(e) => setVisuals(e.target.checked)}
-            className="accent-current"
-          />
-          {t('controls.visuals')}
-        </span>
-        <span className="text-[11px] text-text-muted">{t('controls.visualsHint')}</span>
-      </label>
-      <div className="flex items-center gap-2">
+          <p className="text-xs text-text-muted">{t('controls.allowlistHint')}</p>
+        </>
+      ) : null}
+
+      {view === 'safety' ? (
+        <>
+          <label className="mdx-toggle">
+            <span className="mdx-toggle-text">
+              <span className="text-sm text-text">{t('controls.safeStop')}</span>
+              <span className="text-xs text-text-muted">{t('controls.safeStopHint')}</span>
+            </span>
+            <input
+              type="checkbox"
+              role="switch"
+              className="mdx-switch"
+              checked={safeStop}
+              onChange={(e) => setSafeStop(e.target.checked)}
+            />
+          </label>
+          <label className="mdx-toggle">
+            <span className="mdx-toggle-text">
+              <span className="text-sm text-text">{t('controls.visuals')}</span>
+              <span className="text-xs text-text-muted">{t('controls.visualsHint')}</span>
+            </span>
+            <input
+              type="checkbox"
+              role="switch"
+              className="mdx-switch"
+              checked={visuals}
+              onChange={(e) => setVisuals(e.target.checked)}
+            />
+          </label>
+        </>
+      ) : null}
+
+      <div className="mdx-actions">
+        {saved ? <span className="text-xs text-text-muted">{t('controls.saved')}</span> : null}
         <button
           type="button"
           disabled={saving}
           onClick={handleSave}
-          className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-accent/90 text-bg hover:bg-accent disabled:opacity-50"
+          className="px-4 py-2 rounded-lg text-xs font-semibold bg-input hover:bg-input/80 border border-border text-text disabled:opacity-40 transition-colors shrink-0"
         >
-          {saving ? '...' : t('controls.save')}
+          {t('controls.save')}
         </button>
-        {saved ? (
-          <span className="text-[11px] text-text-muted">{t('controls.saved')}</span>
-        ) : null}
       </div>
     </div>
   )

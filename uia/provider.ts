@@ -1,8 +1,11 @@
 const { execFile } = require('node:child_process')
 const nodePath = require('node:path')
+const nodeOs = require('node:os')
 
 const DUMP_TIMEOUT_MS = 20000
 const INVOKE_TIMEOUT_MS = 15000
+const CAPTURE_TIMEOUT_MS = 25000
+const FOREGROUND_DISPLAY_TIMEOUT_MS = 8000
 
 const SHOOT_MAX_WIDTH = 800
 const SHOOT_JPEG_QUALITY = 55
@@ -145,35 +148,49 @@ function downscaleShot(jpeg, shot, maxWidth, quality) {
 }
 
 /**
- * Captures one replay frame to outPath as a small JPEG.
- * Pure Node (screenshot capture + JPEG downscale), no shell involved.
- * opts: { screen?: display id (default primary) }.
- * Returns { ok, path } — never throws for capture failures.
+ * Downscales a JPEG buffer to a small JPEG buffer (pure JS). Callers pass the
+ * max width/quality policy; omitted values keep the replay default.
  */
-async function captureScreenshot(outPath, opts) {
+function downscaleBuffer(buffer, maxWidth, quality) {
+  const jpeg = require('jpeg-js')
+  return downscaleShot(
+    jpeg,
+    buffer,
+    maxWidth || SHOOT_MAX_WIDTH,
+    quality || SHOOT_JPEG_QUALITY
+  )
+}
+
+/**
+ * Downscales any JPEG buffer under an explicit visual policy. Returns null
+ * when the buffer cannot be decoded, so callers can fall back to the original.
+ */
+function downscaleJpegToLimit(buffer, maxWidth, quality) {
   try {
-    const dest = String(outPath || '')
-    if (!dest) return { ok: false, error: 'Empty output path' }
-    const screenshot = require('screenshot-desktop')
-    const jpeg = require('jpeg-js')
-    const fs = require('node:fs')
-    const shotArgs: { format: string; screen?: unknown } = { format: 'jpg' }
-    if (opts && opts.screen !== undefined && opts.screen !== null && opts.screen !== '') {
-      shotArgs.screen = opts.screen
-    }
-    const shot = await screenshot(shotArgs)
-    const small = downscaleShot(jpeg, shot, SHOOT_MAX_WIDTH, SHOOT_JPEG_QUALITY)
-    await fs.promises.mkdir(require('node:path').dirname(dest), { recursive: true })
-    await fs.promises.writeFile(dest, small)
-    return { ok: true, path: dest }
-  } catch (err: any) {
-    return { ok: false, error: err.message }
+    return downscaleBuffer(buffer, maxWidth, quality)
+  } catch {
+    return null
   }
 }
 
 /**
- * Lists the connected displays: [{ id, name }]. Empty array on failure.
+ * Pure: maps the optional 0-based `screen` index to one entry of the display
+ * list. Omitted index means the first display (`fallback: true`); an index
+ * that is out of range returns null so the caller decides between refusing
+ * the call and capturing the primary display.
  */
+function resolveDisplayEntry(displays, screen) {
+  const list = Array.isArray(displays) ? displays : []
+  if (list.length === 0) return null
+  if (screen === undefined || screen === null || screen === '') {
+    return { index: 0, entry: list[0], fallback: true }
+  }
+  const idx = Math.trunc(Number(screen))
+  if (!Number.isFinite(idx) || idx < 0 || idx >= list.length) return null
+  return { index: idx, entry: list[idx], fallback: false }
+}
+
+/** Lists the connected displays: [{ id, name }]. Empty array on failure. */
 async function listDisplays() {
   try {
     const screenshot = require('screenshot-desktop')
@@ -185,74 +202,206 @@ async function listDisplays() {
 }
 
 /**
- * Captures every display as a small JPEG dataUrl (for the show tool).
- * Returns [{ display, name, dataUrl }] — entries without image are skipped.
+ * Pure: index of the display containing `point`, or -1 when none does.
+ * Used to translate the foreground window center into a display index.
  */
-async function captureAllScreens() {
-  const out: Array<{ display: number; name: string; dataUrl: string }> = []
+function pickDisplayIndexByPoint(displays, point) {
+  const list = Array.isArray(displays) ? displays : []
+  if (!point || !Number.isFinite(point.x) || !Number.isFinite(point.y)) return -1
+  for (let i = 0; i < list.length; i++) {
+    const entry = list[i]
+    if (!entry) continue
+    const left = Number(entry.left)
+    const top = Number(entry.top)
+    const right = Number(entry.right)
+    const bottom = Number(entry.bottom)
+    if (!Number.isFinite(left) || !Number.isFinite(top)) continue
+    if (!Number.isFinite(right) || !Number.isFinite(bottom)) continue
+    if (point.x >= left && point.x < right && point.y >= top && point.y < bottom) return i
+  }
+  return -1
+}
+
+/**
+ * Display index of the screen where the foreground window is, so a plain
+ * "print da tela" on a multi-monitor setup captures the screen in use.
+ * Returns -1 when it cannot be determined (single display, script failure,
+ * minimized window): callers fall back to the default display.
+ */
+async function foregroundDisplayIndex(displays) {
+  if (!Array.isArray(displays) || displays.length < 2) return -1
+  let res: any = null
   try {
-    const screenshot = require('screenshot-desktop')
-    const jpeg = require('jpeg-js')
-    const displays = await listDisplays()
-    const shots = displays.length > 0
-      ? await Promise.all(displays.map(async (d) => {
-        try {
-          // The bundled types omit the documented `screen` option.
-          const args: { format: string; screen?: unknown } = { format: 'jpg', screen: d.id }
-          return await screenshot(args)
-        } catch {
-          return null
-        }
-      }))
-      : [await screenshot({ format: 'jpg' })]
-    for (let i = 0; i < shots.length; i++) {
-      if (!shots[i]) continue
-      try {
-        const small = downscaleShot(jpeg, shots[i], SHOOT_MAX_WIDTH, SHOOT_JPEG_QUALITY)
-        out.push({
-          display: i,
-          name: displays[i] && displays[i].name ? String(displays[i].name) : `Tela ${i + 1}`,
-          dataUrl: `data:image/jpeg;base64,${small.toString('base64')}`,
-        })
-      } catch {
-        /* skip broken frame */
+    res = await runScript('foreground-display.ps1', [], FOREGROUND_DISPLAY_TIMEOUT_MS)
+  } catch {
+    return -1
+  }
+  if (!res || res.ok !== true) return -1
+  return pickDisplayIndexByPoint(displays, {
+    x: Number(res.centerX),
+    y: Number(res.centerY)
+  })
+}
+
+/**
+ * Captures one display as a downscaled JPEG buffer.
+ * opts: { screen?: 0-based display index, preferForeground?, maxWidth?, quality? }.
+ * With no explicit `screen` and `preferForeground`, the screen in use wins.
+ * Returns { ok, buffer, display, name } or { ok: false, error }.
+ */
+async function captureDisplayBuffer(opts) {
+  const settings = opts && typeof opts === 'object' ? opts : {}
+  try {
+    const displayList = await listDisplays()
+    const explicit =
+      settings.screen !== undefined && settings.screen !== null && settings.screen !== ''
+    let resolved = resolveDisplayEntry(displayList, settings.screen)
+    if (displayList.length > 0 && !resolved) {
+      return {
+        ok: false,
+        error: `Display ${String(settings.screen)} not found (${displayList.length} display(s) available)`
       }
     }
-  } catch {
-    /* no screens */
+    if (!explicit && settings.preferForeground === true && displayList.length > 1) {
+      const preferred = await foregroundDisplayIndex(displayList)
+      if (preferred >= 0) {
+        resolved = { index: preferred, entry: displayList[preferred], fallback: true }
+      }
+    }
+    const screenshot = require('screenshot-desktop')
+    const shotArgs: { format: string; screen?: unknown } = { format: 'jpg' }
+    if (resolved && resolved.entry && resolved.entry.id) shotArgs.screen = resolved.entry.id
+    const shot = await screenshot(shotArgs)
+    const buffer = downscaleBuffer(shot, settings.maxWidth, settings.quality)
+    return {
+      ok: true,
+      buffer,
+      display: resolved ? resolved.index : null,
+      name: resolved && resolved.entry ? String(resolved.entry.name || '') : ''
+    }
+  } catch (err: any) {
+    return { ok: false, error: `Could not capture the screen: ${err.message}` }
   }
-  return out
 }
 
 /**
- * Picks one captured display by index for describeScreen: out-of-range or
- * missing values return null so the caller falls back to the primary shot.
+ * Captures one display to outPath as a small JPEG.
+ * Returns { ok, path, display, name } — never throws for capture failures.
  */
-function pickDisplayShot(shots, screen) {
-  const list = Array.isArray(shots) ? shots : []
-  if (list.length === 0) return null
-  if (screen === undefined || screen === null || screen === '') return null
-  const idx = Number(screen)
-  if (!Number.isFinite(idx)) return null
-  const at = Math.trunc(idx)
-  if (at < 0 || at >= list.length) return null
-  return list[at]
+async function captureDisplayToFile(outPath, opts) {
+  const dest = String(outPath || '')
+  if (!dest) return { ok: false, error: 'Empty output path' }
+  const shot = await captureDisplayBuffer(opts)
+  if (!shot.ok) return shot
+  try {
+    const fs = require('node:fs')
+    await fs.promises.mkdir(nodePath.dirname(dest), { recursive: true })
+    await fs.promises.writeFile(dest, shot.buffer)
+    return { ok: true, path: dest, display: shot.display, name: shot.name }
+  } catch (err: any) {
+    return { ok: false, error: `Could not write the capture: ${err.message}` }
+  }
 }
 
 /**
- * Describes what's on screen for the model (detail questions, tricky
- * areas). Reuses the host route POST /extensions/llm/vision (same
+ * Captures one display as a JPEG data URL (no file is written).
+ * opts: { screen?: 0-based display index, maxWidth?, quality? }.
+ * Returns { ok, dataUrl, display, name }.
+ */
+async function captureDisplayDataUrl(screen, opts) {
+  const settings = { ...(opts && typeof opts === 'object' ? opts : {}) }
+  if (settings.screen === undefined && screen !== undefined) settings.screen = screen
+  const shot = await captureDisplayBuffer(settings)
+  if (!shot.ok) return shot
+  return {
+    ok: true,
+    dataUrl: `data:image/jpeg;base64,${shot.buffer.toString('base64')}`,
+    display: shot.display,
+    name: shot.name
+  }
+}
+
+/**
+ * Captures ONE top-level window to outPath as a small JPEG through the
+ * capture-window script (PrintWindow first, screen-region fallback).
+ * opts: { maxWidth?, quality? }. Returns { ok, path, width, height, method }.
+ */
+async function captureWindowToFile(hwnd, outPath, opts) {
+  const id = Math.trunc(Number(hwnd) || 0)
+  if (id <= 0) return { ok: false, error: 'Invalid window handle' }
+  const dest = String(outPath || '')
+  if (!dest) return { ok: false, error: 'Empty output path' }
+  const settings = opts && typeof opts === 'object' ? opts : {}
+  let res: any = null
+  try {
+    res = await runScript(
+      'capture-window.ps1',
+      ['-Hwnd', String(id), '-OutPath', dest],
+      CAPTURE_TIMEOUT_MS
+    )
+  } catch (err: any) {
+    return { ok: false, error: err.message }
+  }
+  if (!res || res.ok !== true) {
+    return { ok: false, error: (res && res.error) || 'Window capture failed' }
+  }
+  const method = res.method
+  try {
+    const fs = require('node:fs')
+    const raw = await fs.promises.readFile(dest)
+    const small = downscaleBuffer(raw, settings.maxWidth, settings.quality)
+    await fs.promises.writeFile(dest, small)
+  } catch (err: any) {
+    return { ok: false, error: `Could not encode the window capture: ${err.message}` }
+  }
+  return { ok: true, path: dest, width: res.width, height: res.height, method }
+}
+
+/**
+ * Captures one top-level window as a JPEG data URL (via a temporary file,
+ * since the capture script returns the image on disk).
+ * Returns { ok, dataUrl, width, height }.
+ */
+async function captureWindowDataUrl(hwnd, opts) {
+  const fs = require('node:fs')
+  const tmp = nodePath.join(
+    nodeOs.tmpdir(),
+    `momai-desktop-window-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}.jpg`
+  )
+  const shot = await captureWindowToFile(hwnd, tmp, opts)
+  if (!shot.ok) return shot
+  try {
+    const bytes = await fs.promises.readFile(tmp)
+    return {
+      ok: true,
+      dataUrl: `data:image/jpeg;base64,${bytes.toString('base64')}`,
+      width: shot.width,
+      height: shot.height
+    }
+  } catch (err: any) {
+    return { ok: false, error: `Could not read the window capture: ${err.message}` }
+  } finally {
+    try {
+      fs.unlinkSync(tmp)
+    } catch {
+      /* best effort */
+    }
+  }
+}
+
+/**
+ * Describes an already captured image for the model (detail questions,
+ * tricky areas). Reuses the host route POST /extensions/llm/vision (same
  * contract the momai-vision extension uses: Bearer session token,
  * {image_base64, prompt, max_tokens}). Returns {ok, text} or
  * {ok:false, unavailable:true, error} when no vision model is on.
  */
-async function describeScreen(question, screen) {
+async function describeImage(question, dataUrl) {
   const apiUrl = String(process.env.MOMAI_API_URL || '').replace(/\/$/, '')
   const token = String(process.env.MOMAI_SESSION_TOKEN || '')
   if (!apiUrl) return { ok: false, unavailable: true, error: 'Host API URL unavailable' }
-  const shots = await captureAllScreens()
-  if (shots.length === 0) return { ok: false, error: 'Screenshot failed on every display.' }
-  const shot = pickDisplayShot(shots, screen) || shots[0]
+  const imageBase64 = String(dataUrl || '').split(',')[1] || ''
+  if (!imageBase64) return { ok: false, error: 'Empty image payload' }
   const prompt = String(question || 'Descreva em detalhes o que aparece nesta screenshot do computador.').slice(0, 500)
   let res: any = null
   try {
@@ -266,7 +415,7 @@ async function describeScreen(question, screen) {
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         body: JSON.stringify({
-          image_base64: shot.dataUrl.split(',')[1],
+          image_base64: imageBase64,
           prompt,
           max_tokens: VISION_DESCRIBE_MAX_TOKENS,
           caller: 'momai-desktop',
@@ -300,7 +449,7 @@ async function describeScreen(question, screen) {
     }
   }
   if (!text.trim()) return { ok: false, error: 'Vision returned an empty description.' }
-  return { ok: true, text: text.trim(), display: shot.name }
+  return { ok: true, text: text.trim() }
 }
 
 module.exports = {
@@ -309,12 +458,17 @@ module.exports = {
   listWindows,
   invokeAction,
   actOnTree,
-  captureScreenshot,
   listDisplays,
-  captureAllScreens,
-  describeScreen,
+  captureDisplayBuffer,
+  captureDisplayToFile,
+  captureDisplayDataUrl,
+  captureWindowToFile,
+  captureWindowDataUrl,
+  describeImage,
+  downscaleJpegToLimit,
 }
 
 module.exports.__internals = {
-  pickDisplayShot,
+  resolveDisplayEntry,
+  pickDisplayIndexByPoint,
 }

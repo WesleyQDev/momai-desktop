@@ -10,6 +10,7 @@ Statt Symbole auf dem Desktop zu suchen oder durch verschiedene Ordner zu navigi
 
 - **Schnelles Öffnen von Apps**: Starten Sie jedes installierte Programm über seinen Namen, wie Ihren Internetbrowser, Musikplayer oder Bearbeitungstools.
 - **Direkter Ordnerzugriff**: Öffnen Sie gängige Systemordner (wie Downloads, Dokumente oder Bilder) oder Ihre eigenen persönlichen Ordner ganz unkompliziert.
+- **Screenshots als Datei**: Bitten Sie um einen Screenshot des aktuellen Monitors, eines anderen Monitors oder eines bestimmten Programmfensters — das Bild wird als Datei gespeichert und erscheint nur im Chat, wenn Sie es sehen möchten. Sie können es anzeigen, behalten oder an eine E-Mail anhängen.
 - **Intelligente Suche**: Die Assistentin findet Programme automatisch in den üblichen Windows-Verzeichnissen, ohne dass Sie den genauen Dateipfad kennen müssen.
 - **Klare Bestätigung**: Wenn es mehrere Programme mit ähnlichem Namen gibt, fragt MomAI klar nach, welches Sie starten möchten, bevor es geöffnet wird.
 
@@ -20,7 +21,9 @@ Statt Symbole auf dem Desktop zu suchen oder durch verschiedene Ordner zu navigi
 - "Öffne meinen Downloads-Ordner."
 - "Öffne den Ordner Dokumente."
 - "Öffne den Rechner des Computers."
+- "Mach einen Screenshot vom Editor-Fenster und zeig ihn mir."
+- "Mach einen Screenshot von Bildschirm 2 und hänge ihn an eine E-Mail an."
 
 ## Sicherheit und Datenschutz
 
-Die Erweiterung MomAI Desktop arbeitet ausschließlich entsprechend Ihren ausdrücklichen Anfragen und respektiert alle Berechtigungen Ihres Windows-Benutzerkontos. Kein Programm oder Ordner wird ohne Ihre Anfrage im Hintergrund ausgeführt.
+Die Erweiterung MomAI Desktop arbeitet ausschließlich entsprechend Ihren ausdrücklichen Anfragen und respektiert alle Berechtigungen Ihres Windows-Benutzerkontos. Kein Programm oder Ordner wird ohne Ihre Anfrage im Hintergrund ausgeführt. Screenshots, Replay-Bilder und Einstellungen bleiben auf Ihrem Computer; Screenshots sind temporär und alte werden automatisch gelöscht.

@@ -6,7 +6,12 @@ import { fileURLToPath } from 'node:url'
 
 // runtime.ts is CJS (module.exports), loaded with native require like the host does.
 const require = createRequire(import.meta.url)
-const runtime = require('../runtime.ts') as { tools: Array<{ name: string }> }
+const runtime = require('../runtime.ts') as {
+  tools: Array<{
+    name: string
+    parameters?: { required?: string[]; properties?: Record<string, { enum?: string[] }> }
+  }>
+}
 const extensionDir = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
 
 // Per-step primitive flow the model must drive itself, without a batched op.
@@ -19,6 +24,10 @@ const REQUIRED_TOOLS = [
   'desktop_press',
   'desktop_stop_run'
 ]
+
+// Prints are files: capture and chat display are separate tools with an
+// explicit, generic scope instead of a fixed all-monitors behavior.
+const CAPTURE_TOOLS = ['desktop_screenshot', 'desktop_show_image']
 
 function readExtensionFile(name: string): string {
   return fs.readFileSync(path.join(extensionDir, name), 'utf8')
@@ -35,6 +44,17 @@ describe('exposed desktop tool surface', () => {
     for (const tool of REQUIRED_TOOLS) {
       expect(names).toContain(tool)
     }
+  })
+
+  it('keeps capture and display as separate tools with a generic scope', () => {
+    const names = runtime.tools.map((tool) => tool.name)
+    for (const tool of CAPTURE_TOOLS) {
+      expect(names).toContain(tool)
+    }
+    const screenshot = runtime.tools.find((tool) => tool.name === 'desktop_screenshot')
+    expect(screenshot?.parameters?.properties?.scope?.enum).toEqual(['display', 'all', 'window'])
+    const show = runtime.tools.find((tool) => tool.name === 'desktop_show_image')
+    expect(show?.parameters?.required).toContain('paths')
   })
 
   it('keeps desktop_act out of manifest.json and SKILL.md', () => {
