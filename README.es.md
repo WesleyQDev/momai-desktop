@@ -1,29 +1,33 @@
 # MomAI Desktop
 
-La extensión MomAI Desktop permite que tu asistente abra aplicaciones, programas, carpetas y archivos en tu ordenador — y automatice tareas haciendo clic y escribiendo en los botones por su nombre.
+MomAI Desktop deja que el asistente abra programas, carpetas y archivos en tu computador. También puedes pedirle que haga clic y escriba en los botones por su nombre, sin buscar la ruta tú mismo.
 
-## Agilidad para abrir todo en tu ordenador
+## Qué puedes hacer
 
-En lugar de buscar iconos en el escritorio o navegar por varias carpetas, solo di lo que necesitas y MomAI se encarga del resto por ti en un instante.
+- Abrir programas instalados por su nombre: navegador, Spotify, editor de texto o calculadora.
+- Abrir carpetas del sistema, como Descargas, Documentos e Imágenes.
+- Hacer clic en un botón o rellenar un campo por su nombre. Por ejemplo: "haz clic en Guardar".
+- Ver cada paso de la automatización en una tarjeta del chat y la línea de tiempo completa en la página de la extensión.
+- Hacer una captura de la pantalla actual, de otro monitor o de una ventana. La imagen se guarda como archivo y solo aparece en el chat cuando la pides. Puedes mostrarla, guardarla o adjuntarla a un correo.
+- Si hay más de un programa con un nombre parecido, MomAI pregunta cuál abrir.
+- Elegir qué apps pueden abrirse, aprobar cada clic y detener la automatización cuando quieras.
 
-### Principales Características
+## Ejemplos
 
-- **Apertura Rápida de Aplicaciones**: Inicia cualquier programa instalado por su nombre, como tu navegador de internet, reproductor de música o herramientas de edición.
-- **Acceso Directo a Carpetas**: Abre carpetas comunes del sistema (como Descargas, Documentos o Imágenes) o tus propias carpetas personales sin complicaciones.
-- **Capturas que se vuelven archivo**: Pide una captura del monitor actual, de otro monitor o de una ventana específica de un programa — la imagen se guarda como archivo y solo aparece en el chat cuando quieres verla. Puedes mostrarla, guardarla o adjuntarla en un correo.
-- **Búsqueda Inteligente**: La asistente localiza los programas automáticamente en los directorios habituales de Windows, sin que necesites saber la ruta exacta del archivo.
-- **Confirmación Clara**: Si hay más de un programa con un nombre similar, MomAI pregunta con claridad cuál deseas iniciar antes de abrirlo.
-
-## Lo que puedes pedir a MomAI
-
-- "Abre el navegador Google Chrome."
-- "Inicia Spotify para escuchar música."
-- "Abre mi carpeta de Descargas."
-- "Abre la carpeta Documentos."
-- "Abre la calculadora del ordenador."
+- "Abre Chrome."
+- "Inicia Spotify."
+- "Abre la carpeta Descargas."
+- "Haz clic en Guardar en el Bloc de notas."
+- "Escribe mi correo en el campo de inicio de sesión."
 - "Haz una captura de la ventana del Bloc de notas y muéstrala."
-- "Haz una captura de la pantalla 2 y adjúntala en un correo."
+- "¿Qué has hecho hasta ahora?"
 
-## Seguridad y Privacidad
+## Privacidad
 
-La extensión MomAI Desktop funciona exclusivamente de acuerdo con tus peticiones expresas y respeta todos los permisos de tu cuenta de usuario en Windows. Ningún programa o carpeta se ejecuta en segundo plano sin tu solicitud. Las capturas, las imágenes del replay visual y las preferencias permanecen en tu ordenador; las capturas son temporales y las antiguas se eliminan automáticamente.
+La extensión solo actúa cuando se lo pides. Las capturas, las imágenes del replay y las preferencias quedan en tu computador, y las capturas antiguas se borran con el tiempo. Cuando pides una descripción de la pantalla, la imagen va al modelo de visión activo en MomAI y vuelve como texto. Los permisos de tu cuenta de usuario siguen valiendo.
+
+## Permisos
+
+- **Sistema:** para abrir programas, carpetas y ventanas y hacer los clics y la escritura que pidas.
+- **Archivos:** para abrir carpetas y guardar las capturas.
+- **Red:** para enviar la imagen al modelo de visión de MomAI cuando pides una descripción.

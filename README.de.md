@@ -1,29 +1,33 @@
 # MomAI Desktop
 
-Die Erweiterung MomAI Desktop ermöglicht es Ihrer Assistentin, Apps, Programme, Ordner und Dateien auf Ihrem Computer zu öffnen — und Aufgaben zu automatisieren, indem sie Schaltflächen beim Namen anklickt und ausfüllt.
+MomAI Desktop lässt den Assistenten Programme, Ordner und Dateien auf Ihrem Computer öffnen. Sie können ihn auch bitten, Schaltflächen nach ihrem Namen anzuklicken und Felder auszufüllen, ohne selbst den Pfad zu suchen.
 
-## Schnelligkeit, um alles auf Ihrem Computer zu öffnen
+## Was Sie damit machen können
 
-Statt Symbole auf dem Desktop zu suchen oder durch verschiedene Ordner zu navigieren, sagen Sie einfach, was Sie brauchen, und MomAI erledigt den Rest für Sie in einem Augenblick.
+- Installierte Programme über ihren Namen öffnen: Browser, Spotify, Texteditor oder Rechner.
+- Systemordner wie Downloads, Dokumente und Bilder öffnen.
+- Eine Schaltfläche nach ihrem Namen anklicken oder ein Feld ausfüllen. Zum Beispiel: "Klicke auf Speichern".
+- Jeden Schritt einer Automatisierung in einer Chat-Karte und den vollständigen Verlauf auf der Seite der Erweiterung sehen.
+- Einen Screenshot des aktuellen Bildschirms, eines anderen Monitors oder eines Fensters machen. Das Bild wird als Datei gespeichert und erscheint nur im Chat, wenn Sie es anfordern. Sie können es zeigen, behalten oder an eine E-Mail anhängen.
+- Wenn mehrere Programme einen ähnlichen Namen haben, fragt MomAI, welches geöffnet werden soll.
+- Festlegen, welche Apps geöffnet werden dürfen, jeden Klick bestätigen und eine Automatisierung jederzeit stoppen.
 
-### Hauptfunktionen
+## Beispiele
 
-- **Schnelles Öffnen von Apps**: Starten Sie jedes installierte Programm über seinen Namen, wie Ihren Internetbrowser, Musikplayer oder Bearbeitungstools.
-- **Direkter Ordnerzugriff**: Öffnen Sie gängige Systemordner (wie Downloads, Dokumente oder Bilder) oder Ihre eigenen persönlichen Ordner ganz unkompliziert.
-- **Screenshots als Datei**: Bitten Sie um einen Screenshot des aktuellen Monitors, eines anderen Monitors oder eines bestimmten Programmfensters — das Bild wird als Datei gespeichert und erscheint nur im Chat, wenn Sie es sehen möchten. Sie können es anzeigen, behalten oder an eine E-Mail anhängen.
-- **Intelligente Suche**: Die Assistentin findet Programme automatisch in den üblichen Windows-Verzeichnissen, ohne dass Sie den genauen Dateipfad kennen müssen.
-- **Klare Bestätigung**: Wenn es mehrere Programme mit ähnlichem Namen gibt, fragt MomAI klar nach, welches Sie starten möchten, bevor es geöffnet wird.
-
-## Was Sie MomAI bitten können
-
-- "Öffne den Browser Google Chrome."
-- "Starte Spotify, damit ich Musik hören kann."
-- "Öffne meinen Downloads-Ordner."
-- "Öffne den Ordner Dokumente."
-- "Öffne den Rechner des Computers."
+- "Öffne Chrome."
+- "Starte Spotify."
+- "Öffne den Downloads-Ordner."
+- "Klicke im Editor auf Speichern."
+- "Trage meine E-Mail in das Anmeldefeld ein."
 - "Mach einen Screenshot vom Editor-Fenster und zeig ihn mir."
-- "Mach einen Screenshot von Bildschirm 2 und hänge ihn an eine E-Mail an."
+- "Was hast du bisher gemacht?"
 
-## Sicherheit und Datenschutz
+## Datenschutz
 
-Die Erweiterung MomAI Desktop arbeitet ausschließlich entsprechend Ihren ausdrücklichen Anfragen und respektiert alle Berechtigungen Ihres Windows-Benutzerkontos. Kein Programm oder Ordner wird ohne Ihre Anfrage im Hintergrund ausgeführt. Screenshots, Replay-Bilder und Einstellungen bleiben auf Ihrem Computer; Screenshots sind temporär und alte werden automatisch gelöscht.
+Die Erweiterung handelt nur, wenn Sie es verlangen. Screenshots, Replay-Bilder und Einstellungen bleiben auf Ihrem Computer, alte Screenshots werden mit der Zeit gelöscht. Wenn Sie eine Bildschirmbeschreibung anfordern, geht das Bild an das aktive Bildmodell in MomAI und kommt als Text zurück. Die Berechtigungen Ihres Benutzerkontos gelten weiterhin.
+
+## Berechtigungen
+
+- **System:** zum Öffnen von Programmen, Ordnern und Fenstern und für die Klicks und Eingaben, die Sie anfordern.
+- **Dateien:** zum Öffnen von Ordnern und Speichern von Screenshots.
+- **Netzwerk:** zum Senden des Bildes an das Bildmodell von MomAI, wenn Sie eine Beschreibung anfordern.
