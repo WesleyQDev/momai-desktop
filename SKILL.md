@@ -1,6 +1,6 @@
 ---
 name: MomAI Desktop
-description: Abre visualmente janelas de programas, aplicativos da Loja, pastas no Windows Explorer ou arquivos na tela do computador, além de automatizar ações na interface gráfica (clicar em botões, digitar em campos, enviar atalhos de teclado), inspecionar elementos visuais da tela ativa via acessibilidade e tirar prints/screenshots da tela do computador (um monitor, todos os monitores ou uma janela de programa), salvos como arquivo de imagem. Use quando o usuário pedir explicitamente para abrir um aplicativo ou janela para ver na tela, clicar, digitar, automatizar uma tarefa em um programa aberto ou tirar um print da tela.
+description: Automação e controle da interface gráfica do computador sob demanda do usuário: abrir programas, janelas no Windows Explorer, interagir com elementos visuais de programas abertos (cliques, digitação, atalhos) ou capturar prints da tela ativa. Use quando o usuário pedir para interagir com o sistema operacional, abrir ou operar programas ou tirar capturas de tela. Não se aplica para inspecionar ou verificar autonomamente alterações de arquivos ou código.
 ---
 
 # MomAI Desktop
@@ -95,6 +95,7 @@ Exemplo ("abra o <programa>, crie um novo <documento> e digite <texto>"):
 - Passos que precisam do primeiro plano (`press`, fallback de mouse/teclado) são recusados pelos guardrails: peça a confirmação e repita com `allowForeground:true`
 - App fora da lista de permitidos: oriente a liberar no page do MomAI Desktop
 - Automação precisa de Windows; em outro sistema, explique o limite em vez de chutar coordenadas
+- Escopo de intenção: atue na interface gráfica do computador quando a intenção do usuário for controlar janelas, programas ou a tela. Não utilize automação de interface como etapa auxiliar não solicitada para verificar arquivos ou projetos
 - Conclua a tarefa ponta a ponta você mesmo, sem explicar ao usuário como ele faria manualmente
 
 ## Página da extensão
