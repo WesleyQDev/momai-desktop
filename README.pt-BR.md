@@ -1,7 +1,5 @@
 # MomAI Desktop
 
-[English](README.md) · **Português** · [Español](README.es.md) · [Français](README.fr.md) · [Italiano](README.it.md) · [Deutsch](README.de.md)
-
 O MomAI Desktop deixa o assistente abrir programas, pastas e arquivos no seu computador. Também dá para pedir que ele clique e digite nos botões pelo nome, sem você procurar o caminho.
 
 ## O que você pode fazer

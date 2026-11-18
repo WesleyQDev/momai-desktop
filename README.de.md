@@ -1,7 +1,5 @@
 # MomAI Desktop
 
-[English](README.md) · [Português](README.pt-BR.md) · [Español](README.es.md) · [Français](README.fr.md) · [Italiano](README.it.md) · **Deutsch**
-
 MomAI Desktop lässt den Assistenten Programme, Ordner und Dateien auf Ihrem Computer öffnen. Sie können ihn auch bitten, Schaltflächen nach ihrem Namen anzuklicken und Felder auszufüllen, ohne selbst den Pfad zu suchen.
 
 ## Was Sie damit machen können
